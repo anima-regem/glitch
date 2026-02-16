@@ -54,7 +54,7 @@ lib/
 
 ## Run Locally
 
-1. Install Flutter 3.38+ (Dart 3.10+).
+1. Install Flutter 3.41.1+ (Dart 3.10+).
 2. Install dependencies:
 
 ```bash
