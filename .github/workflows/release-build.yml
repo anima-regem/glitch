@@ -105,7 +105,9 @@ jobs:
         id: release_notes
         run: |
           NOTES=$(jq -r '.release_notes' version.json)
-          echo "notes=$NOTES" >> $GITHUB_OUTPUT
+          echo 'notes<<EOF' >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

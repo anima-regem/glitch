@@ -72,12 +72,14 @@ Edit `version.json`:
 {
   "version": "1.1.0",
   "build_number": 2,
-  "release_notes": "- Added new feature\n- Fixed bug in X\n- Improved performance",
+  "release_notes": "Added new feature\nFixed bug in X\nImproved performance",
   "is_release": true
 }
 ```
 
-**Important:** Set `is_release` to `true`
+**Notes:**
+- Use `\n` for line breaks in release notes (they will be rendered properly in the GitHub release)
+- Set `is_release` to `true`
 
 ### 2. Commit Changes
 

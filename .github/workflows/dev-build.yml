@@ -1,5 +1,7 @@
 name: Dev Build
 
+# Runs on feature/dev branches only (not main)
+# For testing and validation before merging to main
 on:
   push:
     branches:
