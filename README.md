@@ -54,7 +54,7 @@ lib/
 
 ## Run Locally
 
-1. Install Flutter 3.38+ (Dart 3.10+).
+1. Install Flutter 3.41.1+ (Dart 3.10+).
 2. Install dependencies:
 
 ```bash
@@ -73,6 +73,15 @@ flutter run
 flutter analyze
 flutter test
 ```
+
+## CI/CD Pipeline
+
+This repository includes automated CI/CD workflows:
+
+- **Dev builds**: Automatically run tests and build debug APKs on every push
+- **Release builds**: Create production releases with versioned APKs
+
+See [RELEASE.md](RELEASE.md) for detailed information on the release process.
 
 ## Notes
 
