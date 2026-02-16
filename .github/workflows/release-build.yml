@@ -1,0 +1,127 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      build_number: ${{ steps.extract.outputs.build_number }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract tag version
+        id: extract
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $TAG_VERSION"
+
+      - name: Read version control file
+        id: read_version
+        run: |
+          if [ ! -f version.json ]; then
+            echo "Error: version.json not found"
+            exit 1
+          fi
+          
+          VERSION=$(jq -r '.version' version.json)
+          BUILD_NUMBER=$(jq -r '.build_number' version.json)
+          IS_RELEASE=$(jq -r '.is_release' version.json)
+          
+          echo "Control file version: $VERSION"
+          echo "Control file build number: $BUILD_NUMBER"
+          echo "Is release: $IS_RELEASE"
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          
+          if [ "$IS_RELEASE" != "true" ]; then
+            echo "Error: is_release must be set to true in version.json for release builds"
+            exit 1
+          fi
+
+      - name: Validate version match
+        run: |
+          TAG_VERSION="${{ steps.extract.outputs.version }}"
+          CONTROL_VERSION=$(jq -r '.version' version.json)
+          
+          if [ "$TAG_VERSION" != "$CONTROL_VERSION" ]; then
+            echo "Error: Tag version ($TAG_VERSION) does not match control file version ($CONTROL_VERSION)"
+            exit 1
+          fi
+          
+          echo "Version validation passed: $TAG_VERSION"
+
+  build:
+    name: Build Release APK
+    needs: validate
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --build-name=${{ needs.validate.outputs.version }} \
+            --build-number=${{ needs.validate.outputs.build_number }}
+
+      - name: Rename APK
+        run: |
+          mkdir -p release-artifacts
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             release-artifacts/glitch-v${{ needs.validate.outputs.version }}.apk
+
+      - name: Read release notes
+        id: release_notes
+        run: |
+          NOTES=$(jq -r '.release_notes' version.json)
+          echo "notes=$NOTES" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/glitch-v${{ needs.validate.outputs.version }}.apk
+          body: |
+            ## Release v${{ needs.validate.outputs.version }}
+            
+            Build Number: ${{ needs.validate.outputs.build_number }}
+            
+            ### Release Notes
+            ${{ steps.release_notes.outputs.notes }}
+            
+            ### Installation
+            Download the APK file below and install it on your Android device.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

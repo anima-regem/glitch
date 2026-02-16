@@ -74,6 +74,15 @@ flutter analyze
 flutter test
 ```
 
+## CI/CD Pipeline
+
+This repository includes automated CI/CD workflows:
+
+- **Dev builds**: Automatically run tests and build debug APKs on every push
+- **Release builds**: Create production releases with versioned APKs
+
+See [RELEASE.md](RELEASE.md) for detailed information on the release process.
+
 ## Notes
 
 - Data is local-first. There is no account system and no cloud sync in this version.
