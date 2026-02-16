@@ -1,16 +1,80 @@
-# glitch
+# Glitch
 
-A new Flutter project.
+Glitch is a local-first focus tracker built in Flutter.
 
-## Getting Started
+It is designed around single-task momentum: less dashboard noise, faster execution, and simple daily recovery when mistakes happen.
 
-This project is a starting point for a Flutter application.
+## Core Product
 
-A few resources to get you started if this is your first Flutter project:
+- One-task-at-a-time `Today` flow with swipe navigation
+- Dedicated `Chores` list for editing/completing chores in bulk
+- Habits with flexible recurrence:
+  - Daily
+  - Specific weekdays
+  - X days per week
+- Project + milestone tracking with progress
+- `Done` screen with:
+  - take-back/undo actions (recover accidental completions)
+  - day-based completion heatmap
+- Local encrypted backup/restore (JSON export/import)
+- Dark-first custom UI with selectable dark style:
+  - AMOLED
+  - Black
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## UX Highlights
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Single-focus task card and timer on `Today`
+- “Perfect day” reward state when all planned items are completed
+- Heatmap-driven completion feedback across days
+- Bottom navigation workflow: Today, Chores, Habits, Projects, Done, Settings
+
+## Tech Stack
+
+- Flutter (stable)
+- Riverpod for state management
+- Hive for local persistence
+- AES-encrypted backup with device key (secure storage)
+
+## Project Structure
+
+```text
+lib/
+  core/
+  features/
+    chores/
+    habits/
+    projects/
+    completed/
+    backup/
+    settings/
+    tasks/
+  shared/
+  main.dart
+```
+
+## Run Locally
+
+1. Install Flutter 3.38+ (Dart 3.10+).
+2. Install dependencies:
+
+```bash
+flutter pub get
+```
+
+3. Run the app:
+
+```bash
+flutter run
+```
+
+## Quality Checks
+
+```bash
+flutter analyze
+flutter test
+```
+
+## Notes
+
+- Data is local-first. There is no account system and no cloud sync in this version.
+- Backups are encrypted and intended for manual export/import workflows.
