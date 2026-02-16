@@ -1,4 +1,4 @@
-package com.example.glitch
+package in.karthav.glitch
 
 import io.flutter.embedding.android.FlutterActivity
 
