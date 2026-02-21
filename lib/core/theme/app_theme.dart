@@ -108,6 +108,33 @@ extension GlitchThemeX on BuildContext {
   }
 }
 
+class AppMotionTokens {
+  static const Duration fast = Duration(milliseconds: 140);
+  static const Duration base = Duration(milliseconds: 220);
+  static const Duration emphasis = Duration(milliseconds: 360);
+
+  static const Curve enterCurve = Curves.easeOutCubic;
+  static const Curve exitCurve = Curves.easeInOutCubic;
+  static const Curve emphasizedCurve = Curves.easeOutBack;
+}
+
+extension GlitchMotionX on BuildContext {
+  bool get prefersReducedMotion {
+    return MediaQuery.maybeOf(this)?.disableAnimations ?? false;
+  }
+
+  Duration motion(Duration duration) {
+    if (!prefersReducedMotion) {
+      return duration;
+    }
+
+    if (duration <= AppMotionTokens.fast) {
+      return const Duration(milliseconds: 1);
+    }
+    return const Duration(milliseconds: 120);
+  }
+}
+
 class AppTheme {
   static ThemeData light({required bool highContrast}) {
     final palette = GlitchPalette(

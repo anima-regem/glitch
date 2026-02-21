@@ -61,6 +61,8 @@ class _ChoreCard extends ConsumerWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         title: Text(
           chore.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -72,10 +74,22 @@ class _ChoreCard extends ConsumerWidget {
             const SizedBox(height: 2),
             Text(
               dueLabel,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: _isOverdue(chore) ? palette.warning : palette.textMuted,
               ),
             ),
+            if (chore.description != null &&
+                chore.description!.trim().isNotEmpty)
+              Text(
+                chore.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+              ),
             if (chore.estimatedMinutes != null)
               Text(
                 'Estimate ${chore.estimatedMinutes} min',

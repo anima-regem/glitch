@@ -84,9 +84,15 @@ class ProjectDetailScreen extends ConsumerWidget {
               ...milestones.map((milestone) {
                 return Card(
                   child: ListTile(
-                    title: Text(milestone.title),
+                    title: Text(
+                      milestone.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: Text(
                       milestone.completed ? 'Completed' : 'In progress',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -132,16 +138,20 @@ class ProjectDetailScreen extends ConsumerWidget {
               }),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              TaskCreationSheet.open(
-                context,
-                initialType: TaskType.milestone,
-                fixedProjectId: projectId,
-              );
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add milestone'),
+          bottomNavigationBar: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: FilledButton.icon(
+              onPressed: () {
+                TaskCreationSheet.open(
+                  context,
+                  initialType: TaskType.milestone,
+                  fixedProjectId: projectId,
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add milestone'),
+            ),
           ),
         );
       },

@@ -21,13 +21,16 @@ class CompletedScreen extends ConsumerWidget {
         final completedTasks = notifier.completedTasks();
         final completedHabitLogs = notifier.completedHabitLogs();
         final taskMap = {for (final task in data.tasks) task.id: task};
+        final projectMap = {
+          for (final project in data.projects) project.id: project.name,
+        };
 
         final allEntries = <_CompletedEntry>[
           ...completedTasks.map(
             (task) => _CompletedEntry(
               kind: _CompletedEntryKind.task,
               label: task.title,
-              typeLabel: task.type.label,
+              typeLabel: _completedTypeLabel(task, projectMap),
               date: normalizeDate(task.completedAt ?? task.createdAt),
               taskId: task.id,
             ),
@@ -49,6 +52,12 @@ class CompletedScreen extends ConsumerWidget {
           start: heatmapStart,
           end: now,
         );
+        final weekStart = now.subtract(const Duration(days: 6));
+        final weeklyProgress = notifier.dayProgressRange(
+          start: weekStart,
+          end: now,
+        );
+        final weeklySummary = _WeeklySummary.fromMap(weeklyProgress);
 
         final grouped = <DateTime, List<_CompletedEntry>>{};
         for (final entry in allEntries) {
@@ -66,6 +75,8 @@ class CompletedScreen extends ConsumerWidget {
               end: now,
               progressByDay: heatmap,
             ),
+            const SizedBox(height: 10),
+            _WeeklyReflectionCard(summary: weeklySummary),
             const SizedBox(height: 14),
             if (allEntries.isEmpty)
               Center(
@@ -110,6 +121,18 @@ class CompletedScreen extends ConsumerWidget {
         );
       },
     );
+  }
+
+  String _completedTypeLabel(TaskItem task, Map<String, String> projectById) {
+    if (task.type != TaskType.milestone) {
+      return task.type.label;
+    }
+
+    final projectName = projectById[task.projectId]?.trim();
+    if (projectName == null || projectName.isEmpty) {
+      return 'Milestone';
+    }
+    return 'Milestone • $projectName';
   }
 
   Future<void> _undoEntry(
@@ -162,8 +185,12 @@ class _CompletedEntryTile extends StatelessWidget {
     return Card(
       child: ListTile(
         dense: true,
-        title: Text(entry.label),
-        subtitle: Text(entry.typeLabel),
+        title: Text(entry.label, maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          entry.typeLabel,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         trailing: TextButton.icon(
           onPressed: onUndo,
           icon: const Icon(Icons.undo),
@@ -220,7 +247,7 @@ class _CompletionHeatmap extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Each square shows how fully that day was completed.',
+              'Each square shows how fully that day was completed. Low days stay neutral so recovery feels easy.',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
@@ -280,7 +307,7 @@ class _CompletionHeatmap extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Low to high: gray → accent',
+              'Low to high: neutral gray -> accent',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
@@ -301,15 +328,106 @@ class _CompletionHeatmap extends StatelessWidget {
 
     final ratio = progress.ratio;
     if (ratio <= 0) {
-      return palette.warning.withValues(alpha: 0.28);
+      return palette.surfaceRaised;
     }
     if (ratio < 0.4) {
-      return palette.accent.withValues(alpha: 0.35);
+      return palette.accent.withValues(alpha: 0.22);
     }
     if (ratio < 0.8) {
       return palette.accent.withValues(alpha: 0.6);
     }
     return palette.accent;
+  }
+}
+
+class _WeeklyReflectionCard extends StatelessWidget {
+  const _WeeklyReflectionCard({required this.summary});
+
+  final _WeeklySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.glitchPalette;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Weekly reflection',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${summary.completed}/${summary.planned} completed this week - ${summary.perfectDays} perfect day(s).',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              summary.message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WeeklySummary {
+  const _WeeklySummary({
+    required this.planned,
+    required this.completed,
+    required this.perfectDays,
+  });
+
+  final int planned;
+  final int completed;
+  final int perfectDays;
+
+  double get ratio {
+    if (planned <= 0) {
+      return 0;
+    }
+    return (completed / planned).clamp(0, 1);
+  }
+
+  String get message {
+    if (planned == 0) {
+      return 'No pressure week. Start tomorrow with one small win.';
+    }
+    if (ratio >= 0.8) {
+      return 'Steady rhythm this week. Keep the same calm pace.';
+    }
+    if (ratio >= 0.4) {
+      return 'Mixed week, still moving forward. Pick one priority for tomorrow.';
+    }
+    return 'A quiet week can still reset momentum. Plan one easy task next.';
+  }
+
+  factory _WeeklySummary.fromMap(Map<DateTime, DayProgress> progressByDay) {
+    var planned = 0;
+    var completed = 0;
+    var perfectDays = 0;
+
+    for (final progress in progressByDay.values) {
+      planned += progress.plannedCount;
+      completed += progress.completedCount;
+      if (progress.isPerfectDay) {
+        perfectDays += 1;
+      }
+    }
+
+    return _WeeklySummary(
+      planned: planned,
+      completed: completed,
+      perfectDays: perfectDays,
+    );
   }
 }
 

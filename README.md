@@ -16,7 +16,8 @@ It is designed around single-task momentum: less dashboard noise, faster executi
 - `Done` screen with:
   - take-back/undo actions (recover accidental completions)
   - day-based completion heatmap
-- Local encrypted backup/restore (JSON export/import)
+- Local encrypted backup/restore (passphrase-protected JSON export/import)
+- Optional first-run backup vault setup (choose folder outside app sandbox)
 - Dark-first custom UI with selectable dark style:
   - AMOLED
   - Black
@@ -27,13 +28,14 @@ It is designed around single-task momentum: less dashboard noise, faster executi
 - “Perfect day” reward state when all planned items are completed
 - Heatmap-driven completion feedback across days
 - Bottom navigation workflow: Today, Chores, Habits, Projects, Done, Settings
+- Backup vault controls in Settings: set/change folder, sync now, rotate passphrase
 
 ## Tech Stack
 
 - Flutter (stable)
 - Riverpod for state management
 - Hive for local persistence
-- AES-encrypted backup with device key (secure storage)
+- AES-encrypted backup with passphrase-derived key (PBKDF2)
 
 ## Project Structure
 
@@ -86,4 +88,5 @@ See [RELEASE.md](RELEASE.md) for detailed information on the release process.
 ## Notes
 
 - Data is local-first. There is no account system and no cloud sync in this version.
-- Backups are encrypted and intended for manual export/import workflows.
+- Backups are encrypted and portable across device migration when using the same passphrase.
+- When backup vault is configured, encrypted snapshots auto-sync to `glitch-vault-latest.json` in the selected folder.

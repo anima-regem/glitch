@@ -1,40 +1,241 @@
+import 'dart:async';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 
+import '../../core/models/app_data.dart';
 import '../../core/models/task.dart';
+import '../../core/services/storage_permission_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../features/chores/chores_screen.dart';
+import '../../features/backup/passphrase_prompt.dart';
 import '../../features/completed/completed_screen.dart';
-import '../../features/habits/habits_screen.dart';
-import '../../features/projects/projects_screen.dart';
+import '../../features/focus/focus_screen.dart';
+import '../../features/lists/lists_hub_screen.dart';
+import '../../features/projects/project_creation_sheet.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/shell/migration_recovery_screen.dart';
 import '../../features/tasks/task_creation_sheet.dart';
-import '../../features/tasks/today_home_screen.dart';
+import '../../shared/state/app_controller.dart';
 
-enum AppSection { today, chores, habits, projects, completed, settings }
+enum AppSection { focus, lists, done, settings }
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
-  AppSection _currentSection = AppSection.today;
+class _AppShellState extends ConsumerState<AppShell> {
+  AppSection _currentSection = AppSection.focus;
+  bool _backupPromptShownThisSession = false;
+  bool _backupPromptDeferredThisSession = false;
+  final StoragePermissionService _storagePermissionService =
+      const StoragePermissionService();
+
+  void _maybePromptBackupVault(AppData data) {
+    final prefs = data.preferences;
+    if (_backupPromptShownThisSession) {
+      return;
+    }
+
+    final configuredPath = prefs.backupVaultPath?.trim();
+    if (prefs.backupVaultPromptDismissed ||
+        (configuredPath != null && configuredPath.isNotEmpty)) {
+      _backupPromptShownThisSession = true;
+      return;
+    }
+
+    final hasActivationMilestone = _hasActivationMilestone(data);
+    final reachedSecondOpen = prefs.backupPromptDeferrals >= 1;
+    if (!hasActivationMilestone && _backupPromptDeferredThisSession) {
+      return;
+    }
+
+    if (!hasActivationMilestone && !reachedSecondOpen) {
+      if (!_backupPromptDeferredThisSession) {
+        _backupPromptDeferredThisSession = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          unawaited(
+            ref
+                .read(appControllerProvider.notifier)
+                .incrementBackupPromptDeferrals(),
+          );
+        });
+      }
+      return;
+    }
+
+    _backupPromptShownThisSession = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      await _showBackupVaultGetStarted();
+    });
+  }
+
+  bool _hasActivationMilestone(AppData data) {
+    final hasCompletedTasks = data.tasks.any((task) => task.completed);
+    final hasCompletedHabitLogs = data.habitLogs.any((log) => log.completed);
+    return hasCompletedTasks || hasCompletedHabitLogs;
+  }
+
+  Future<void> _showBackupVaultGetStarted() async {
+    final action = await showDialog<_BackupVaultPromptAction>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Protect data across uninstall'),
+          content: const Text(
+            'Set a backup vault folder to keep encrypted snapshots outside app storage. This helps recovery after uninstall or device migration.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(_BackupVaultPromptAction.later);
+              },
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(_BackupVaultPromptAction.setupNow);
+              },
+              child: const Text('Set up now'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (action == null) {
+      return;
+    }
+
+    if (action != _BackupVaultPromptAction.setupNow) {
+      await ref
+          .read(appControllerProvider.notifier)
+          .setBackupVaultPromptDismissed();
+      return;
+    }
+
+    final hasPermission = await _ensureStoragePermission();
+    if (!hasPermission || !mounted) {
+      return;
+    }
+
+    String? directory;
+    try {
+      directory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select backup vault folder',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Folder picker failed: $error')));
+      return;
+    }
+
+    if (directory == null || !mounted) {
+      return;
+    }
+
+    final passphrase = await showBackupPassphraseDialog(
+      context: context,
+      title: 'Set vault passphrase',
+      description:
+          'This passphrase encrypts your vault snapshot and is required to restore on another device.',
+      confirmPassphrase: true,
+    );
+    if (passphrase == null || !mounted) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(appControllerProvider.notifier)
+          .configureBackupVault(
+            directoryPath: directory,
+            passphrase: passphrase,
+          );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backup vault configured at $directory')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backup vault setup failed: $error')),
+      );
+    }
+  }
+
+  Future<bool> _ensureStoragePermission() async {
+    final permission = await _storagePermissionService
+        .ensureStoragePermissionForFolderAccess();
+    if (permission.granted || !mounted) {
+      return permission.granted;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(permission.message),
+        action: permission.canOpenSettings
+            ? SnackBarAction(
+                label: 'Settings',
+                onPressed: () {
+                  openAppSettings();
+                },
+              )
+            : null,
+      ),
+    );
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final appState = ref.watch(appControllerProvider);
+    final data = appState.valueOrNull;
+    final controller = ref.read(appControllerProvider.notifier);
+    if (data != null) {
+      _maybePromptBackupVault(data);
+    }
+    final migrationFailure = controller.hasMigrationFailure
+        ? (controller.migrationFailureReason ?? 'Unknown migration error.')
+        : null;
+
+    if (migrationFailure != null) {
+      return Scaffold(
+        body: MigrationRecoveryScreen(failureReason: migrationFailure),
+      );
+    }
+
     return Scaffold(
-      appBar: _currentSection == AppSection.today
-          ? null
-          : AppBar(title: Text(_titleFor(_currentSection))),
+      appBar: _buildAppBar(),
       body: IndexedStack(
         index: _currentSection.index,
         children: const <Widget>[
-          TodayHomeScreen(),
-          ChoresScreen(),
-          HabitsScreen(),
-          ProjectsScreen(),
+          FocusScreen(),
+          ListsHubScreen(),
           CompletedScreen(),
           SettingsScreen(),
         ],
@@ -47,55 +248,122 @@ class _AppShellState extends State<AppShell> {
           });
         },
       ),
-      floatingActionButton: _fabForSection(context),
     );
   }
 
-  Widget? _fabForSection(BuildContext context) {
-    switch (_currentSection) {
-      case AppSection.today:
-        return FloatingActionButton(
-          onPressed: () => TaskCreationSheet.open(context),
-          child: const Icon(Icons.add),
-        );
-      case AppSection.chores:
-        return FloatingActionButton.extended(
-          onPressed: () =>
-              TaskCreationSheet.open(context, initialType: TaskType.chore),
+  PreferredSizeWidget? _buildAppBar() {
+    if (_currentSection == AppSection.focus) {
+      return null;
+    }
+
+    final actions = switch (_currentSection) {
+      AppSection.lists => <Widget>[
+        IconButton(
+          tooltip: 'Add item',
+          onPressed: _showListsCreateMenu,
           icon: const Icon(Icons.add),
-          label: const Text('Chore'),
+        ),
+      ],
+      AppSection.done ||
+      AppSection.settings ||
+      AppSection.focus => const <Widget>[],
+    };
+
+    return AppBar(title: Text(_titleFor(_currentSection)), actions: actions);
+  }
+
+  Future<void> _showListsCreateMenu() async {
+    final action = await showModalBottomSheet<_ListCreateAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const ListTile(
+                title: Text('Create from Lists'),
+                subtitle: Text('Choose what you want to add'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.checklist_outlined),
+                title: const Text('Chore'),
+                onTap: () {
+                  Navigator.of(context).pop(_ListCreateAction.chore);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.repeat_outlined),
+                title: const Text('Habit'),
+                onTap: () {
+                  Navigator.of(context).pop(_ListCreateAction.habit);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.work_outline),
+                title: const Text('Milestone'),
+                onTap: () {
+                  Navigator.of(context).pop(_ListCreateAction.milestone);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.layers_outlined),
+                title: const Text('Project'),
+                onTap: () {
+                  Navigator.of(context).pop(_ListCreateAction.project);
+                },
+              ),
+            ],
+          ),
         );
-      case AppSection.habits:
-        return FloatingActionButton.extended(
-          onPressed: () =>
-              TaskCreationSheet.open(context, initialType: TaskType.habit),
-          icon: const Icon(Icons.add),
-          label: const Text('Habit'),
-        );
-      case AppSection.projects:
-        return FloatingActionButton.extended(
-          onPressed: () =>
-              TaskCreationSheet.open(context, initialType: TaskType.milestone),
-          icon: const Icon(Icons.add),
-          label: const Text('Milestone'),
-        );
-      case AppSection.completed:
-      case AppSection.settings:
-        return null;
+      },
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _ListCreateAction.chore:
+        await TaskCreationSheet.open(context, initialType: TaskType.chore);
+        break;
+      case _ListCreateAction.habit:
+        await TaskCreationSheet.open(context, initialType: TaskType.habit);
+        break;
+      case _ListCreateAction.milestone:
+        final projects = ref.read(appControllerProvider.notifier).projects();
+        if (projects.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Create a project first so milestones have a clear home.',
+              ),
+            ),
+          );
+          await ProjectCreationSheet.open(context);
+          return;
+        }
+        await TaskCreationSheet.open(context, initialType: TaskType.milestone);
+        break;
+      case _ListCreateAction.project:
+        await ProjectCreationSheet.open(context);
+        break;
     }
   }
 
   String _titleFor(AppSection section) {
     return switch (section) {
-      AppSection.today => 'Today',
-      AppSection.chores => 'Chores',
-      AppSection.habits => 'Habits',
-      AppSection.projects => 'Projects',
-      AppSection.completed => 'Completed',
+      AppSection.focus => 'Focus',
+      AppSection.lists => 'Lists',
+      AppSection.done => 'Done',
       AppSection.settings => 'Settings',
     };
   }
 }
+
+enum _BackupVaultPromptAction { setupNow, later }
+
+enum _ListCreateAction { chore, habit, milestone, project }
 
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation({required this.current, required this.onChanged});
@@ -121,31 +389,19 @@ class _BottomNavigation extends StatelessWidget {
           children:
               <_NavItemData>[
                     const _NavItemData(
-                      section: AppSection.today,
-                      icon: Icons.today_outlined,
-                      selectedIcon: Icons.today,
-                      label: 'Today',
+                      section: AppSection.focus,
+                      icon: Icons.self_improvement_outlined,
+                      selectedIcon: Icons.self_improvement,
+                      label: 'Focus',
                     ),
                     const _NavItemData(
-                      section: AppSection.chores,
+                      section: AppSection.lists,
                       icon: Icons.checklist_outlined,
                       selectedIcon: Icons.checklist,
-                      label: 'Chores',
+                      label: 'Lists',
                     ),
                     const _NavItemData(
-                      section: AppSection.habits,
-                      icon: Icons.repeat_outlined,
-                      selectedIcon: Icons.repeat,
-                      label: 'Habits',
-                    ),
-                    const _NavItemData(
-                      section: AppSection.projects,
-                      icon: Icons.work_outline,
-                      selectedIcon: Icons.work,
-                      label: 'Projects',
-                    ),
-                    const _NavItemData(
-                      section: AppSection.completed,
+                      section: AppSection.done,
                       icon: Icons.check_circle_outline,
                       selectedIcon: Icons.check_circle,
                       label: 'Done',

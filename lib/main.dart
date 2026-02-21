@@ -2,13 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/models/app_preferences.dart';
+import 'core/services/reminder_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/splash/splash_screen.dart';
 import 'shared/state/app_controller.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: GlitchApp()));
+  runApp(
+    ProviderScope(
+      overrides: <Override>[
+        reminderServiceProvider.overrideWithValue(LocalReminderService()),
+      ],
+      child: const GlitchApp(),
+    ),
+  );
 }
 
 class GlitchApp extends ConsumerWidget {
@@ -31,9 +39,14 @@ class GlitchApp extends ConsumerWidget {
       themeMode: preferences.useDarkMode ? ThemeMode.dark : ThemeMode.light,
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
+        final systemScale = mediaQuery.textScaler.scale(1);
+        final composedScale = (systemScale * preferences.textScale).clamp(
+          0.8,
+          3.0,
+        );
         return MediaQuery(
           data: mediaQuery.copyWith(
-            textScaler: TextScaler.linear(preferences.textScale),
+            textScaler: TextScaler.linear(composedScale.toDouble()),
           ),
           child: child ?? const SizedBox.shrink(),
         );

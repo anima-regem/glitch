@@ -40,4 +40,26 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1900));
   });
+
+  testWidgets('first open does not show backup prompt and uses reduced nav', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          localStoreProvider.overrideWithValue(_MemoryStore()),
+        ],
+        child: const GlitchApp(),
+      ),
+    );
+
+    await tester.pump(const Duration(milliseconds: 1900));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Protect data across uninstall'), findsNothing);
+    expect(find.text('Focus'), findsWidgets);
+    expect(find.text('Lists'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+  });
 }
