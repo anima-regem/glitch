@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "build_number": 1.2,
-  "release_notes": "Initial release",
+  "version": "1.0.3",
+  "build_number": 3,
+  "release_notes": "Swipe-first focus rework.\nReminder and settings reliability improvements.\nBranding and app icon refresh.",
   "is_release": true
 }
