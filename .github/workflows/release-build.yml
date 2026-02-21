@@ -68,7 +68,7 @@ jobs:
           echo "Version validation passed: $TAG_VERSION"
 
   build:
-    name: Build Release APK
+    name: Build Release Artifacts
     needs: validate
     runs-on: ubuntu-latest
     
@@ -101,11 +101,19 @@ jobs:
             --build-name=${{ needs.validate.outputs.version }} \
             --build-number=${{ needs.validate.outputs.build_number }}
 
-      - name: Rename APK
+      - name: Build release App Bundle
+        run: |
+          flutter build appbundle --release \
+            --build-name=${{ needs.validate.outputs.version }} \
+            --build-number=${{ needs.validate.outputs.build_number }}
+
+      - name: Collect release artifacts
         run: |
           mkdir -p release-artifacts
           cp build/app/outputs/flutter-apk/app-release.apk \
              release-artifacts/glitch-v${{ needs.validate.outputs.version }}.apk
+          cp build/app/outputs/bundle/release/app-release.aab \
+             release-artifacts/glitch-v${{ needs.validate.outputs.version }}.aab
 
       - name: Read release notes
         id: release_notes
@@ -118,7 +126,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-artifacts/glitch-v${{ needs.validate.outputs.version }}.apk
+          files: |
+            release-artifacts/glitch-v${{ needs.validate.outputs.version }}.apk
+            release-artifacts/glitch-v${{ needs.validate.outputs.version }}.aab
           body: |
             ## Release v${{ needs.validate.outputs.version }}
             
@@ -128,7 +138,8 @@ jobs:
             ${{ steps.release_notes.outputs.notes }}
             
             ### Installation
-            Download the APK file below and install it on your Android device.
+            - APK: install directly on Android devices.
+            - AAB: upload to Google Play Console.
           draft: false
           prerelease: false
         env:
