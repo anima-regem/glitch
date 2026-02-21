@@ -473,7 +473,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       setState(() {
         _appName = info.appName.trim().isEmpty ? 'Glitch' : info.appName.trim();
         _packageName = info.packageName.trim();
-        _appVersionLabel = 'Version ${info.version} (${info.buildNumber})';
+        _appVersionLabel = 'Version ${info.version}+${info.buildNumber}';
       });
     } catch (_) {
       if (!mounted) {

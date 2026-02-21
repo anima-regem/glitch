@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.extract.outputs.version }}
-      build_number: ${{ steps.extract.outputs.build_number }}
+      build_number: ${{ steps.read_version.outputs.build_number }}
     
     steps:
       - name: Checkout repository
@@ -42,6 +42,12 @@ jobs:
           echo "Control file version: $VERSION"
           echo "Control file build number: $BUILD_NUMBER"
           echo "Is release: $IS_RELEASE"
+
+          if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "Error: build_number must be an integer in version.json"
+            exit 1
+          fi
+
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           
           if [ "$IS_RELEASE" != "true" ]; then
