@@ -1,14 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/task.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_time_utils.dart';
 import '../../shared/state/app_controller.dart';
-import 'task_card.dart';
 import 'task_creation_sheet.dart';
 
 class TodayHomeScreen extends ConsumerStatefulWidget {
@@ -19,14 +17,13 @@ class TodayHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
-  final PageController _pageController = PageController(viewportFraction: 0.9);
+  final PageController _pageController = PageController();
   final Map<String, int> _elapsedByTask = <String, int>{};
 
   Timer? _timer;
   int _pageIndex = 0;
   bool _running = false;
   String? _activeTaskId;
-  bool _milestoneGlitch = false;
 
   @override
   void dispose() {
@@ -70,6 +67,9 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
                   _TopBar(
                     dateLabel: formatReadableDate(DateTime.now()),
                     indexLabel: '0 / 0',
+                    onAdd: () {
+                      TaskCreationSheet.open(context);
+                    },
                   ),
                   const Spacer(),
                   Icon(
@@ -118,6 +118,22 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
                         ),
                       ),
                     ),
+                  if (todayProgress.hadAnythingPlanned)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: _EndOfDayRecapCard(
+                        progress: todayProgress,
+                        onPlanTomorrow: () async {
+                          await TaskCreationSheet.open(
+                            context,
+                            initialType: TaskType.chore,
+                            initialScheduledDate: normalizeDate(
+                              DateTime.now().add(const Duration(days: 1)),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   const Spacer(),
                 ],
               ),
@@ -128,21 +144,6 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
             _pageIndex = tasks.length - 1;
           }
 
-          final currentTask = tasks[_pageIndex];
-          final elapsed = _durationForTask(currentTask);
-          final targetSeconds = (currentTask.estimatedMinutes ?? 25) * 60;
-          final progress = targetSeconds == 0
-              ? 0.0
-              : (elapsed / targetSeconds).clamp(0.0, 1.0);
-
-          final habitDoneToday = currentTask.type == TaskType.habit
-              ? notifier.isHabitCompletedOnDate(currentTask.id, DateTime.now())
-              : false;
-
-          final primaryLabel = currentTask.type == TaskType.habit
-              ? (habitDoneToday ? 'Undo Today' : 'Mark Complete')
-              : 'Mark Complete';
-
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
@@ -150,6 +151,9 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
                 _TopBar(
                   dateLabel: formatReadableDate(DateTime.now()),
                   indexLabel: '${_pageIndex + 1} / ${tasks.length}',
+                  onAdd: () {
+                    TaskCreationSheet.open(context);
+                  },
                 ),
                 const SizedBox(height: 10),
                 Expanded(
@@ -167,100 +171,58 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
                     },
                     itemBuilder: (context, index) {
                       final task = tasks[index];
-                      final isVisible = index == _pageIndex;
-                      return AnimatedScale(
-                        duration: const Duration(milliseconds: 220),
-                        scale: isVisible ? 1 : 0.96,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            transform: Matrix4.translationValues(
-                              isVisible && _milestoneGlitch ? 4 : 0,
-                              0,
-                              0,
-                            ),
-                            child: TaskCard(
-                              task: task,
-                              habitCompletedToday: notifier
-                                  .isHabitCompletedOnDate(
-                                    task.id,
-                                    DateTime.now(),
-                                  ),
-                              habitStreak: notifier.streakForHabit(task.id),
-                              habitStreakUnit: notifier.habitStreakUnit(
-                                task.id,
-                              ),
-                              habitWeeklyCompletions: notifier
-                                  .habitCompletionsThisWeek(task.id),
-                              habitWeeklyTarget: notifier.habitWeeklyTarget(
-                                task.id,
-                              ),
-                              habitCompletionDates: notifier
-                                  .completionDatesForHabit(task.id),
-                            ),
-                          ),
-                        ),
+                      final elapsed = _durationForTask(task);
+                      final targetSeconds = (task.estimatedMinutes ?? 25) * 60;
+                      final progress = targetSeconds == 0
+                          ? 0.0
+                          : (elapsed / targetSeconds).clamp(0.0, 1.0);
+                      final habitDoneToday = task.type == TaskType.habit
+                          ? notifier.isHabitCompletedOnDate(
+                              task.id,
+                              DateTime.now(),
+                            )
+                          : false;
+                      final primaryLabel = task.type == TaskType.habit
+                          ? (habitDoneToday ? 'Undo Today' : 'Mark Complete')
+                          : 'Mark Complete';
+
+                      return _TodayFocusCard(
+                        task: task,
+                        projectName: notifier.projectNameForId(task.projectId),
+                        habitDoneToday: habitDoneToday,
+                        habitStreak: notifier.streakForHabit(task.id),
+                        habitStreakUnit: notifier.habitStreakUnit(task.id),
+                        habitWeeklyCompletions: notifier
+                            .habitCompletionsThisWeek(task.id),
+                        habitWeeklyTarget: notifier.habitWeeklyTarget(task.id),
+                        elapsedSeconds: elapsed,
+                        timerProgress: progress,
+                        running: _running && _activeTaskId == task.id,
+                        targetMinutes: task.estimatedMinutes,
+                        primaryLabel: primaryLabel,
+                        onToggleTimer: () async {
+                          if (_running && _activeTaskId == task.id) {
+                            await _pauseTimer();
+                          } else {
+                            _startTimer(task);
+                          }
+                        },
+                        onPrimaryAction: () async {
+                          await _completeTask(
+                            task: task,
+                            habitDoneToday: habitDoneToday,
+                          );
+                        },
+                        onOverflowAction: (action) async {
+                          await _pauseTimer();
+                          if (!mounted) {
+                            return;
+                          }
+                          await _handleOverflowAction(action, task);
+                        },
                       );
                     },
                   ),
-                ),
-                const SizedBox(height: 14),
-                _TimerBlock(
-                  elapsedSeconds: elapsed,
-                  progress: progress,
-                  running: _running && _activeTaskId == currentTask.id,
-                  targetMinutes: currentTask.estimatedMinutes,
-                  onToggle: () {
-                    if (_running && _activeTaskId == currentTask.id) {
-                      _pauseTimer();
-                    } else {
-                      _startTimer(currentTask);
-                    }
-                  },
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => _completeTask(
-                      task: currentTask,
-                      habitDoneToday: habitDoneToday,
-                    ),
-                    child: Text(primaryLabel),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await _pauseTimer();
-                          if (!context.mounted) {
-                            return;
-                          }
-                          await TaskCreationSheet.open(
-                            context,
-                            existingTask: currentTask,
-                          );
-                        },
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Edit'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          await _pauseTimer();
-                          await _confirmDeleteTask(currentTask);
-                        },
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('Delete'),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -310,7 +272,7 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
 
     if (activeId != null) {
       final seconds = _elapsedByTask[activeId] ?? 0;
-      final minutes = (seconds / 60).ceil();
+      final minutes = seconds ~/ 60;
       await ref
           .read(appControllerProvider.notifier)
           .updateTaskDuration(activeId, minutes);
@@ -333,16 +295,7 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
     }
 
     final seconds = _durationForTask(task);
-    final minutes = (seconds / 60).ceil();
-
-    if (task.type == TaskType.milestone) {
-      HapticFeedback.selectionClick();
-      setState(() => _milestoneGlitch = true);
-      await Future<void>.delayed(const Duration(milliseconds: 220));
-      if (mounted) {
-        setState(() => _milestoneGlitch = false);
-      }
-    }
+    final minutes = seconds ~/ 60;
 
     await ref
         .read(appControllerProvider.notifier)
@@ -382,13 +335,34 @@ class _TodayHomeScreenState extends ConsumerState<TodayHomeScreen> {
       context,
     ).showSnackBar(const SnackBar(content: Text('Task deleted')));
   }
+
+  Future<void> _handleOverflowAction(
+    _TaskOverflowAction action,
+    TaskItem task,
+  ) async {
+    switch (action) {
+      case _TaskOverflowAction.edit:
+        await TaskCreationSheet.open(context, existingTask: task);
+        break;
+      case _TaskOverflowAction.delete:
+        await _confirmDeleteTask(task);
+        break;
+    }
+  }
 }
 
+enum _TaskOverflowAction { edit, delete }
+
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.dateLabel, required this.indexLabel});
+  const _TopBar({
+    required this.dateLabel,
+    required this.indexLabel,
+    required this.onAdd,
+  });
 
   final String dateLabel;
   final String indexLabel;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -428,73 +402,359 @@ class _TopBar extends StatelessWidget {
             style: Theme.of(context).textTheme.labelLarge,
           ),
         ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: 'Add task',
+          onPressed: onAdd,
+          icon: const Icon(Icons.add_circle_outline),
+        ),
       ],
     );
   }
 }
 
-class _TimerBlock extends StatelessWidget {
-  const _TimerBlock({
+class _TodayFocusCard extends StatelessWidget {
+  const _TodayFocusCard({
+    required this.task,
+    required this.projectName,
+    required this.habitDoneToday,
+    required this.habitStreak,
+    required this.habitStreakUnit,
+    required this.habitWeeklyCompletions,
+    required this.habitWeeklyTarget,
     required this.elapsedSeconds,
-    required this.progress,
+    required this.timerProgress,
     required this.running,
     required this.targetMinutes,
-    required this.onToggle,
+    required this.primaryLabel,
+    required this.onToggleTimer,
+    required this.onPrimaryAction,
+    required this.onOverflowAction,
   });
 
+  final TaskItem task;
+  final String? projectName;
+  final bool habitDoneToday;
+  final int habitStreak;
+  final String habitStreakUnit;
+  final int habitWeeklyCompletions;
+  final int habitWeeklyTarget;
   final int elapsedSeconds;
-  final double progress;
+  final double timerProgress;
   final bool running;
   final int? targetMinutes;
-  final VoidCallback onToggle;
+  final String primaryLabel;
+  final Future<void> Function() onToggleTimer;
+  final Future<void> Function() onPrimaryAction;
+  final Future<void> Function(_TaskOverflowAction action) onOverflowAction;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.glitchPalette;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        SizedBox(
-          width: 110,
-          height: 110,
-          child: Stack(
-            alignment: Alignment.center,
-            children: <Widget>[
-              CircularProgressIndicator(
-                value: progress,
-                strokeWidth: 8,
-                backgroundColor: palette.surfaceRaised,
-              ),
-              Text(
-                formatTimer(elapsedSeconds),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Column(
+    final normalizedProjectName = projectName?.trim();
+    final hasProject =
+        normalizedProjectName != null && normalizedProjectName.isNotEmpty;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            OutlinedButton.icon(
-              onPressed: onToggle,
-              icon: Icon(running ? Icons.pause : Icons.play_arrow),
-              label: Text(running ? 'Pause' : 'Start'),
+            Row(
+              children: <Widget>[
+                _TaskTypePill(type: task.type),
+                if (task.type == TaskType.milestone) ...<Widget>[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: _ContextPill(
+                      label: hasProject
+                          ? 'Project: $normalizedProjectName'
+                          : 'Project not set',
+                      accent: hasProject ? palette.accent : palette.warning,
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                if (task.type == TaskType.habit)
+                  _ContextPill(
+                    label: habitDoneToday ? 'Done today' : 'Pending today',
+                    accent: habitDoneToday ? palette.accent : palette.textMuted,
+                  ),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      task.title,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.12),
+                    ),
+                    if (task.description != null &&
+                        task.description!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          task.description!,
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                    if (task.type == TaskType.habit)
+                      Text(
+                        habitWeeklyTarget > 0
+                            ? '$habitWeeklyCompletions/$habitWeeklyTarget this week • $habitStreak $habitStreakUnit streak'
+                            : '$habitStreak $habitStreakUnit streak',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    if (task.type != TaskType.habit &&
+                        task.scheduledDate != null)
+                      Text(
+                        'Due ${formatReadableDate(task.scheduledDate!)}',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    if (task.estimatedMinutes != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Estimate ${task.estimatedMinutes} min',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: palette.surfaceRaised,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: palette.surfaceStroke),
+              ),
+              child: Row(
+                children: <Widget>[
+                  SizedBox(
+                    width: 88,
+                    height: 88,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        CircularProgressIndicator(
+                          value: timerProgress,
+                          strokeWidth: 7,
+                          backgroundColor: palette.surface,
+                        ),
+                        Text(
+                          formatTimer(elapsedSeconds),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          running ? 'Timer running' : 'Timer paused',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          targetMinutes == null
+                              ? 'No estimate'
+                              : 'Target $targetMinutes min',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 128,
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              await onToggleTimer();
+                            },
+                            icon: Icon(
+                              running ? Icons.pause : Icons.play_arrow,
+                            ),
+                            label: Text(running ? 'Pause' : 'Start'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () async {
+                      await onPrimaryAction();
+                    },
+                    child: Text(primaryLabel),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                PopupMenuButton<_TaskOverflowAction>(
+                  tooltip: 'Task actions',
+                  onSelected: (action) async {
+                    await onOverflowAction(action);
+                  },
+                  itemBuilder: (context) =>
+                      const <PopupMenuEntry<_TaskOverflowAction>>[
+                        PopupMenuItem<_TaskOverflowAction>(
+                          value: _TaskOverflowAction.edit,
+                          child: Text('Edit'),
+                        ),
+                        PopupMenuItem<_TaskOverflowAction>(
+                          value: _TaskOverflowAction.delete,
+                          child: Text('Delete'),
+                        ),
+                      ],
+                  icon: Icon(Icons.more_vert, color: palette.textMuted),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskTypePill extends StatelessWidget {
+  const _TaskTypePill({required this.type});
+
+  final TaskType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.glitchPalette;
+    final Color bg;
+    switch (type) {
+      case TaskType.chore:
+        bg = palette.pillChore;
+        break;
+      case TaskType.habit:
+        bg = palette.pillHabit;
+        break;
+      case TaskType.milestone:
+        bg = palette.pillMilestone;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        type.label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: palette.pillText,
+        ),
+      ),
+    );
+  }
+}
+
+class _ContextPill extends StatelessWidget {
+  const _ContextPill({required this.label, required this.accent});
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.glitchPalette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.surfaceStroke),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: accent,
+        ),
+      ),
+    );
+  }
+}
+
+class _EndOfDayRecapCard extends StatelessWidget {
+  const _EndOfDayRecapCard({
+    required this.progress,
+    required this.onPlanTomorrow,
+  });
+
+  final DayProgress progress;
+  final Future<void> Function() onPlanTomorrow;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.glitchPalette;
+    final completionPercent = (progress.ratio * 100).round();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
             Text(
-              targetMinutes == null
-                  ? 'No estimate'
-                  : 'Target $targetMinutes min',
+              'End-of-day recap',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${progress.completedCount}/${progress.plannedCount} completed ($completionPercent%).',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Keep momentum by setting one task for tomorrow.',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
             ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: () {
+                unawaited(onPlanTomorrow());
+              },
+              child: const Text('Plan tomorrow'),
+            ),
           ],
         ),
-      ],
+      ),
     );
   }
 }

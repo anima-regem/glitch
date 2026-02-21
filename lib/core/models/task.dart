@@ -4,6 +4,12 @@ enum TaskType { chore, habit, milestone }
 
 enum HabitRecurrenceType { daily, specificDays, timesPerWeek }
 
+enum TaskPriority { low, medium, high }
+
+enum TaskEffort { light, deep }
+
+enum TaskEnergyWindow { any, morning, afternoon, evening }
+
 extension TaskTypeLabel on TaskType {
   String get label {
     switch (this) {
@@ -40,6 +46,66 @@ extension HabitRecurrenceTypeLabel on HabitRecurrenceType {
     return HabitRecurrenceType.values.firstWhere(
       (type) => type.name == value,
       orElse: () => HabitRecurrenceType.daily,
+    );
+  }
+}
+
+extension TaskPriorityLabel on TaskPriority {
+  String get label {
+    switch (this) {
+      case TaskPriority.low:
+        return 'Low';
+      case TaskPriority.medium:
+        return 'Medium';
+      case TaskPriority.high:
+        return 'High';
+    }
+  }
+
+  static TaskPriority fromStorage(String? value) {
+    return TaskPriority.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => TaskPriority.medium,
+    );
+  }
+}
+
+extension TaskEffortLabel on TaskEffort {
+  String get label {
+    switch (this) {
+      case TaskEffort.light:
+        return 'Light';
+      case TaskEffort.deep:
+        return 'Deep';
+    }
+  }
+
+  static TaskEffort fromStorage(String? value) {
+    return TaskEffort.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => TaskEffort.light,
+    );
+  }
+}
+
+extension TaskEnergyWindowLabel on TaskEnergyWindow {
+  String get label {
+    switch (this) {
+      case TaskEnergyWindow.any:
+        return 'Any time';
+      case TaskEnergyWindow.morning:
+        return 'Morning';
+      case TaskEnergyWindow.afternoon:
+        return 'Afternoon';
+      case TaskEnergyWindow.evening:
+        return 'Evening';
+    }
+  }
+
+  static TaskEnergyWindow fromStorage(String? value) {
+    return TaskEnergyWindow.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => TaskEnergyWindow.any,
     );
   }
 }
@@ -191,6 +257,9 @@ class TaskItem {
     this.projectId,
     this.recurrence,
     this.completedAt,
+    this.priority = TaskPriority.medium,
+    this.effort = TaskEffort.light,
+    this.energyWindow = TaskEnergyWindow.any,
   });
 
   final String id;
@@ -205,6 +274,9 @@ class TaskItem {
   final HabitRecurrence? recurrence;
   final DateTime createdAt;
   final DateTime? completedAt;
+  final TaskPriority priority;
+  final TaskEffort effort;
+  final TaskEnergyWindow energyWindow;
 
   bool get isHabit => type == TaskType.habit;
 
@@ -221,6 +293,9 @@ class TaskItem {
     HabitRecurrence? recurrence,
     DateTime? createdAt,
     DateTime? completedAt,
+    TaskPriority? priority,
+    TaskEffort? effort,
+    TaskEnergyWindow? energyWindow,
     bool clearDescription = false,
     bool clearScheduledDate = false,
     bool clearEstimatedMinutes = false,
@@ -248,6 +323,9 @@ class TaskItem {
       recurrence: clearRecurrence ? null : (recurrence ?? this.recurrence),
       createdAt: createdAt ?? this.createdAt,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
+      priority: priority ?? this.priority,
+      effort: effort ?? this.effort,
+      energyWindow: energyWindow ?? this.energyWindow,
     );
   }
 
@@ -265,6 +343,9 @@ class TaskItem {
       'recurrence': recurrence?.toJson(),
       'createdAt': createdAt.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
+      'priority': priority.name,
+      'effort': effort.name,
+      'energyWindow': energyWindow.name,
     };
   }
 
@@ -290,6 +371,11 @@ class TaskItem {
             ),
       createdAt: createdAt,
       completedAt: _parseDateTime(json['completedAt']),
+      priority: TaskPriorityLabel.fromStorage(json['priority'] as String?),
+      effort: TaskEffortLabel.fromStorage(json['effort'] as String?),
+      energyWindow: TaskEnergyWindowLabel.fromStorage(
+        json['energyWindow'] as String?,
+      ),
     );
   }
 

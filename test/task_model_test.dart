@@ -39,6 +39,9 @@ void main() {
       completed: false,
       createdAt: DateTime(2026, 2, 17),
       recurrence: HabitRecurrence.timesPerWeek(3),
+      priority: TaskPriority.high,
+      effort: TaskEffort.deep,
+      energyWindow: TaskEnergyWindow.morning,
     );
 
     final roundTrip = TaskItem.fromJson(original.toJson());
@@ -46,5 +49,8 @@ void main() {
     expect(roundTrip.recurrence?.type, HabitRecurrenceType.timesPerWeek);
     expect(roundTrip.recurrence?.timesPerWeek, 3);
     expect(roundTrip.title, original.title);
+    expect(roundTrip.priority, TaskPriority.high);
+    expect(roundTrip.effort, TaskEffort.deep);
+    expect(roundTrip.energyWindow, TaskEnergyWindow.morning);
   });
 }

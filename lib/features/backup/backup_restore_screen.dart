@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'passphrase_prompt.dart';
 import '../../shared/state/app_controller.dart';
 
 class BackupRestoreScreen extends ConsumerStatefulWidget {
@@ -30,7 +31,7 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Exports are encrypted with an AES key stored on this device.',
+          'Exports are encrypted with your passphrase so they can be restored on any device.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 20),
@@ -72,11 +73,16 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   }
 
   Future<void> _exportBackup() async {
+    final passphrase = await _promptPassphrase(confirm: true, forExport: true);
+    if (passphrase == null || !mounted) {
+      return;
+    }
+
     setState(() => _busy = true);
     try {
       final path = await ref
           .read(appControllerProvider.notifier)
-          .exportBackup();
+          .exportBackup(passphrase: passphrase);
       if (!mounted) {
         return;
       }
@@ -139,11 +145,19 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
       return;
     }
 
+    final passphrase = await _promptPassphrase(
+      confirm: false,
+      forExport: false,
+    );
+    if (passphrase == null || !mounted) {
+      return;
+    }
+
     setState(() => _busy = true);
     try {
       await ref
           .read(appControllerProvider.notifier)
-          .importBackupFromPath(filePath);
+          .importBackupFromPath(filePath, passphrase: passphrase);
       if (!mounted) {
         return;
       }
@@ -157,7 +171,7 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Import failed. Invalid backup key/file.'),
+          content: Text('Import failed. Invalid passphrase or backup file.'),
         ),
       );
     } finally {
@@ -165,5 +179,20 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
         setState(() => _busy = false);
       }
     }
+  }
+
+  Future<String?> _promptPassphrase({
+    required bool confirm,
+    required bool forExport,
+  }) {
+    return showBackupPassphraseDialog(
+      context: context,
+      title: forExport ? 'Set backup passphrase' : 'Enter backup passphrase',
+      description: forExport
+          ? 'This passphrase is required to restore on another device. It cannot be recovered.'
+          : 'Enter the passphrase used when this backup was created.',
+      confirmPassphrase: confirm,
+      requireMinLength: forExport,
+    );
   }
 }

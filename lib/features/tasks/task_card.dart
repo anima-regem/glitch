@@ -8,6 +8,7 @@ class TaskCard extends StatefulWidget {
   const TaskCard({
     super.key,
     required this.task,
+    this.projectName,
     required this.habitCompletedToday,
     required this.habitStreak,
     required this.habitStreakUnit,
@@ -17,6 +18,7 @@ class TaskCard extends StatefulWidget {
   });
 
   final TaskItem task;
+  final String? projectName;
   final bool habitCompletedToday;
   final int habitStreak;
   final String habitStreakUnit;
@@ -29,84 +31,121 @@ class TaskCard extends StatefulWidget {
 }
 
 class _TaskCardState extends State<TaskCard> {
-  bool _expandedDescription = false;
-
   @override
   Widget build(BuildContext context) {
     final palette = context.glitchPalette;
     final task = widget.task;
+    final projectName = widget.projectName?.trim();
+    final hasProjectName = projectName != null && projectName.isNotEmpty;
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _TypePill(type: task.type),
-            const SizedBox(height: 18),
-            Text(
-              task.title,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                height: 1.08,
-              ),
+            Row(
+              children: <Widget>[
+                _TypePill(type: task.type),
+                if (task.type == TaskType.milestone) ...<Widget>[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: _ContextPill(
+                      label: hasProjectName
+                          ? 'Project: $projectName'
+                          : 'Project not set',
+                      accent: hasProjectName ? palette.accent : palette.warning,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            if (task.description != null && task.description!.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 14),
+            const SizedBox(height: 14),
+            Expanded(
+              child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      task.description!,
-                      maxLines: _expandedDescription ? null : 2,
-                      overflow: _expandedDescription
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      task.title,
+                      softWrap: true,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.12),
                     ),
-                    const SizedBox(height: 4),
-                    TextButton(
-                      onPressed: () => setState(
-                        () => _expandedDescription = !_expandedDescription,
+                    if (task.description != null &&
+                        task.description!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          task.description!,
+                          softWrap: true,
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(color: palette.textMuted),
+                        ),
                       ),
-                      child: Text(
-                        _expandedDescription ? 'Hide' : 'Show details',
+                    const SizedBox(height: 16),
+                    if (task.type == TaskType.habit)
+                      _HabitDetails(
+                        recurrence: task.recurrence,
+                        completedToday: widget.habitCompletedToday,
+                        streak: widget.habitStreak,
+                        streakUnit: widget.habitStreakUnit,
+                        weeklyCompletions: widget.habitWeeklyCompletions,
+                        weeklyTarget: widget.habitWeeklyTarget,
+                        completionDates: widget.habitCompletionDates,
                       ),
-                    ),
+                    if (task.type != TaskType.habit &&
+                        task.scheduledDate != null)
+                      Text(
+                        'Due ${formatReadableDate(task.scheduledDate!)}',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    if (task.estimatedMinutes != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Estimate ${task.estimatedMinutes} min',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            const Spacer(),
-            if (task.type == TaskType.habit)
-              _HabitDetails(
-                recurrence: task.recurrence,
-                completedToday: widget.habitCompletedToday,
-                streak: widget.habitStreak,
-                streakUnit: widget.habitStreakUnit,
-                weeklyCompletions: widget.habitWeeklyCompletions,
-                weeklyTarget: widget.habitWeeklyTarget,
-                completionDates: widget.habitCompletionDates,
-              ),
-            if (task.type != TaskType.habit && task.scheduledDate != null)
-              Text(
-                'Due ${formatReadableDate(task.scheduledDate!)}',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(color: palette.textMuted),
-              ),
-            if (task.estimatedMinutes != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Estimate ${task.estimatedMinutes} min',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(color: palette.textMuted),
-                ),
-              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContextPill extends StatelessWidget {
+  const _ContextPill({required this.label, required this.accent});
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.glitchPalette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.surfaceStroke),
+      ),
+      child: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: accent,
         ),
       ),
     );
@@ -186,7 +225,9 @@ class _HabitDetails extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
           children: <Widget>[
             Text(
               isWeeklyTargetMode
@@ -197,7 +238,6 @@ class _HabitDetails extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(width: 12),
             Text(
               '$streak $streakUnit streak',
               style: Theme.of(context).textTheme.bodyMedium,

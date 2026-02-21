@@ -188,6 +188,8 @@ class _ProjectCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -224,7 +226,7 @@ class _ProjectCard extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     description!,
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(
                       context,
@@ -234,20 +236,21 @@ class _ProjectCard extends StatelessWidget {
               const SizedBox(height: 12),
               LinearProgressIndicator(value: progress / 100),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                spacing: 10,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
                   Text(
                     '$progress% complete',
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
-                  const SizedBox(width: 10),
                   Text(
                     '•',
                     style: Theme.of(
                       context,
                     ).textTheme.labelLarge?.copyWith(color: palette.textMuted),
                   ),
-                  const SizedBox(width: 10),
                   Text(
                     '$activeMilestones active milestones',
                     style: Theme.of(
