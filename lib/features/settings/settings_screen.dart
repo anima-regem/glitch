@@ -24,8 +24,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   static const String _updatesUrl =
       'https://github.com/anima-regem/glitch/releases/latest';
   static const String _buyCoffeeUrl = 'https://buymeacoffee.com/vichukartha';
-  static const String _buyCoffeeQrUrl =
-      'https://quickchart.io/qr?size=420&text=https%3A%2F%2Fbuymeacoffee.com%2Fvichukartha';
+  static const String _buyCoffeeQrAssetPath =
+      'assets/support/buymeacoffee_qr.png';
 
   bool _vaultBusy = false;
   bool _sendingTestReminder = false;
@@ -416,8 +416,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           onTap: () {
                             _openExternalLink(_buyCoffeeUrl);
                           },
-                          child: Image.network(
-                            _buyCoffeeQrUrl,
+                          child: Image.asset(
+                            _buyCoffeeQrAssetPath,
                             width: 220,
                             height: 220,
                             fit: BoxFit.cover,
