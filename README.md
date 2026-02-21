@@ -78,6 +78,7 @@ flutter test
 - GitHub repository: [anima-regem/glitch](https://github.com/anima-regem/glitch)
 - Latest releases: [GitHub Releases](https://github.com/anima-regem/glitch/releases/latest)
 - Google Play listing: [Glitch on Google Play](https://play.google.com/store/apps/details?id=in.karthav.glitch)
+- Privacy policy: [privacy-policy.html](privacy-policy.html)
 
 ## Release Process
 - Release workflow guide: [RELEASE.md](RELEASE.md)
