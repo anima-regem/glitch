@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/app_preferences.dart';
 import '../../core/models/project.dart';
 import '../../core/models/task.dart';
 import '../../core/theme/app_theme.dart';
 import '../projects/project_creation_sheet.dart';
 import '../../shared/state/app_controller.dart';
+import '../../shared/widgets/voice_typing_text_field.dart';
 
 class TaskCreationSheet extends ConsumerStatefulWidget {
   const TaskCreationSheet({
@@ -132,6 +134,7 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
   Widget build(BuildContext context) {
     final appState = ref.watch(appControllerProvider).valueOrNull;
     final projects = appState?.projects ?? const <ProjectItem>[];
+    final prefs = appState?.preferences ?? AppPreferences.defaults();
     final palette = context.glitchPalette;
 
     final noProjectsAvailable =
@@ -165,8 +168,15 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            TextField(
+            VoiceTypingTextField(
               controller: _titleController,
+              voiceTypingEnabled: prefs.voiceTypingEnabled,
+              allowNetworkFallback: prefs.voiceTypingAllowNetworkFallback,
+              onAllowNetworkFallbackChanged: (value) {
+                return ref
+                    .read(appControllerProvider.notifier)
+                    .setVoiceTypingAllowNetworkFallback(value);
+              },
               textInputAction: TextInputAction.next,
               onTapOutside: (_) => FocusScope.of(context).unfocus(),
               onChanged: (_) {
@@ -500,9 +510,16 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
               },
             ),
             const SizedBox(height: 12),
-            TextField(
+            VoiceTypingTextField(
               controller: _descriptionController,
               focusNode: _descriptionFocusNode,
+              voiceTypingEnabled: prefs.voiceTypingEnabled,
+              allowNetworkFallback: prefs.voiceTypingAllowNetworkFallback,
+              onAllowNetworkFallbackChanged: (value) {
+                return ref
+                    .read(appControllerProvider.notifier)
+                    .setVoiceTypingAllowNetworkFallback(value);
+              },
               minLines: 3,
               maxLines: 5,
               onTapOutside: (_) => FocusScope.of(context).unfocus(),

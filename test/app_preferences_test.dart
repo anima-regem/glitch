@@ -11,6 +11,8 @@ void main() {
     expect(prefs.remindersEnabled, isFalse);
     expect(prefs.reminderHour, 20);
     expect(prefs.reminderMinute, 0);
+    expect(prefs.voiceTypingEnabled, isTrue);
+    expect(prefs.voiceTypingAllowNetworkFallback, isFalse);
     expect(prefs.lastVaultSyncAt, isNull);
     expect(prefs.lastVaultSyncError, isNull);
     expect(prefs.dataSchemaVersion, AppPreferences.currentSchemaVersion);
@@ -27,6 +29,8 @@ void main() {
       reminderHour: 9,
       reminderMinute: 30,
       backupPromptDeferrals: 1,
+      voiceTypingEnabled: false,
+      voiceTypingAllowNetworkFallback: true,
       backupVaultPath: '/tmp/glitch-vault',
       backupVaultPromptDismissed: true,
       lastVaultSyncAt: DateTime(2026, 2, 20, 8, 45),
@@ -43,6 +47,8 @@ void main() {
     expect(restored.remindersEnabled, isTrue);
     expect(restored.reminderHour, 9);
     expect(restored.reminderMinute, 30);
+    expect(restored.voiceTypingEnabled, isFalse);
+    expect(restored.voiceTypingAllowNetworkFallback, isTrue);
     expect(restored.lastVaultSyncAt, DateTime(2026, 2, 20, 8, 45));
     expect(restored.lastVaultSyncError, 'Example');
     expect(restored.dataSchemaVersion, 2);

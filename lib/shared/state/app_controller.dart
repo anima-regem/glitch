@@ -11,6 +11,7 @@ import '../../core/models/project.dart';
 import '../../core/models/task.dart';
 import '../../core/services/backup_service.dart';
 import '../../core/services/reminder_service.dart';
+import '../../core/services/voice_typing_service.dart';
 import '../../core/storage/local_store.dart';
 import '../../core/utils/date_time_utils.dart';
 
@@ -20,6 +21,10 @@ final backupServiceProvider = Provider<BackupService>((ref) => BackupService());
 
 final reminderServiceProvider = Provider<ReminderService>(
   (ref) => const NoopReminderService(),
+);
+
+final voiceTypingServiceProvider = Provider<VoiceTypingService>(
+  (ref) => NativeVoiceTypingService(),
 );
 
 final appControllerProvider = AsyncNotifierProvider<AppController, AppData>(
@@ -1026,6 +1031,24 @@ class AppController extends AsyncNotifier<AppData> {
         reminderHour: normalizedHour,
         reminderMinute: normalizedMinute,
       ),
+    );
+  }
+
+  Future<void> setVoiceTypingEnabled(bool enabled) async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    await updatePreferences(prefs.copyWith(voiceTypingEnabled: enabled));
+  }
+
+  Future<void> setVoiceTypingAllowNetworkFallback(bool enabled) async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    await updatePreferences(
+      prefs.copyWith(voiceTypingAllowNetworkFallback: enabled),
     );
   }
 

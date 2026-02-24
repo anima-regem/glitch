@@ -31,6 +31,8 @@ class AppPreferences {
     required this.reminderHour,
     required this.reminderMinute,
     required this.backupPromptDeferrals,
+    required this.voiceTypingEnabled,
+    required this.voiceTypingAllowNetworkFallback,
     this.backupVaultPath,
     this.backupVaultPromptDismissed = false,
     this.lastVaultSyncAt,
@@ -51,6 +53,8 @@ class AppPreferences {
       reminderHour: 20,
       reminderMinute: 0,
       backupPromptDeferrals: 0,
+      voiceTypingEnabled: true,
+      voiceTypingAllowNetworkFallback: false,
       backupVaultPath: null,
       backupVaultPromptDismissed: false,
       lastVaultSyncAt: null,
@@ -68,6 +72,8 @@ class AppPreferences {
   final int reminderHour;
   final int reminderMinute;
   final int backupPromptDeferrals;
+  final bool voiceTypingEnabled;
+  final bool voiceTypingAllowNetworkFallback;
   final String? backupVaultPath;
   final bool backupVaultPromptDismissed;
   final DateTime? lastVaultSyncAt;
@@ -84,6 +90,8 @@ class AppPreferences {
     int? reminderHour,
     int? reminderMinute,
     int? backupPromptDeferrals,
+    bool? voiceTypingEnabled,
+    bool? voiceTypingAllowNetworkFallback,
     String? backupVaultPath,
     bool? backupVaultPromptDismissed,
     DateTime? lastVaultSyncAt,
@@ -105,6 +113,10 @@ class AppPreferences {
       reminderMinute: reminderMinute ?? this.reminderMinute,
       backupPromptDeferrals:
           backupPromptDeferrals ?? this.backupPromptDeferrals,
+      voiceTypingEnabled: voiceTypingEnabled ?? this.voiceTypingEnabled,
+      voiceTypingAllowNetworkFallback:
+          voiceTypingAllowNetworkFallback ??
+          this.voiceTypingAllowNetworkFallback,
       backupVaultPath: clearBackupVaultPath
           ? null
           : (backupVaultPath ?? this.backupVaultPath),
@@ -134,6 +146,8 @@ class AppPreferences {
       'reminderHour': reminderHour,
       'reminderMinute': reminderMinute,
       'backupPromptDeferrals': backupPromptDeferrals,
+      'voiceTypingEnabled': voiceTypingEnabled,
+      'voiceTypingAllowNetworkFallback': voiceTypingAllowNetworkFallback,
       'backupVaultPath': backupVaultPath,
       'backupVaultPromptDismissed': backupVaultPromptDismissed,
       'lastVaultSyncAt': lastVaultSyncAt?.toIso8601String(),
@@ -164,6 +178,9 @@ class AppPreferences {
           ((json['backupPromptDeferrals'] as num?)?.toInt() ?? 0)
               .clamp(0, 365)
               .toInt(),
+      voiceTypingEnabled: json['voiceTypingEnabled'] as bool? ?? true,
+      voiceTypingAllowNetworkFallback:
+          json['voiceTypingAllowNetworkFallback'] as bool? ?? false,
       backupVaultPath: (path == null || path.isEmpty) ? null : path,
       backupVaultPromptDismissed:
           json['backupVaultPromptDismissed'] as bool? ?? false,

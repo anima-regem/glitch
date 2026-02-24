@@ -203,6 +203,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            _sectionHeader(context, 'Voice Typing'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Use hold-to-talk dictation on text fields.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: prefs.voiceTypingEnabled,
+                      title: const Text('Enable voice typing'),
+                      subtitle: const Text(
+                        'Shows a hold-to-talk mic on text inputs.',
+                      ),
+                      onChanged: (enabled) {
+                        ref
+                            .read(appControllerProvider.notifier)
+                            .setVoiceTypingEnabled(enabled);
+                      },
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: prefs.voiceTypingAllowNetworkFallback,
+                      title: const Text('Allow fallback speech mode'),
+                      subtitle: const Text(
+                        'If on-device speech is unavailable, allow fallback that may use network processing.',
+                      ),
+                      onChanged: prefs.voiceTypingEnabled
+                          ? (enabled) {
+                              ref
+                                  .read(appControllerProvider.notifier)
+                                  .setVoiceTypingAllowNetworkFallback(enabled);
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             _sectionHeader(context, 'Data Safety'),
             Card(
               child: Padding(

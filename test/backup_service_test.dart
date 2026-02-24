@@ -94,6 +94,8 @@ AppData _sampleData() {
       reminderHour: 20,
       reminderMinute: 0,
       backupPromptDeferrals: 0,
+      voiceTypingEnabled: true,
+      voiceTypingAllowNetworkFallback: false,
     ),
   );
 }

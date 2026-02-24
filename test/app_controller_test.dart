@@ -364,6 +364,24 @@ void main() {
     },
   );
 
+  test(
+    'voice typing preferences persist through app controller setters',
+    () async {
+      final container = _containerWithMemoryStore();
+      addTearDown(container.dispose);
+
+      await container.read(appControllerProvider.future);
+      final notifier = container.read(appControllerProvider.notifier);
+
+      await notifier.setVoiceTypingEnabled(false);
+      await notifier.setVoiceTypingAllowNetworkFallback(true);
+
+      final prefs = container.read(appControllerProvider).value!.preferences;
+      expect(prefs.voiceTypingEnabled, isFalse);
+      expect(prefs.voiceTypingAllowNetworkFallback, isTrue);
+    },
+  );
+
   test('test reminder triggers reminder service test notification', () async {
     final reminderService = _RecordingReminderService();
     final container = _containerWithMemoryStore(
