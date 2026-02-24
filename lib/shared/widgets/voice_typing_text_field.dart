@@ -34,6 +34,7 @@ class VoiceTypingTextField extends ConsumerStatefulWidget {
     this.onChanged,
     this.onSubmitted,
     this.platformSupportOverride,
+    this.alwaysShowMicButton = false,
   });
 
   final TextEditingController controller;
@@ -61,6 +62,7 @@ class VoiceTypingTextField extends ConsumerStatefulWidget {
 
   // Useful for widget tests where Platform.isAndroid is false.
   final bool? platformSupportOverride;
+  final bool alwaysShowMicButton;
 
   @override
   ConsumerState<VoiceTypingTextField> createState() =>
@@ -108,7 +110,7 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
         !widget.obscureText;
   }
 
-  bool get _showMicButton => _voiceAvailable && _fieldFocused;
+  bool get _showMicButton => _voiceAvailable && (widget.alwaysShowMicButton || _fieldFocused);
 
   @override
   void initState() {
@@ -196,22 +198,26 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     }
 
     final micButton = GestureDetector(
+      onTap: _handleMicTap,
       onLongPressStart: _handleMicLongPressStart,
       onLongPressEnd: _handleMicLongPressEnd,
       onLongPressCancel: _handleMicLongPressCancel,
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 46,
-        height: 46,
-        child: Center(
-          child: ScaleTransition(
-            scale: _pulseController,
-            child: Icon(
-              _listening ? Icons.mic : Icons.mic_none,
-              size: 20,
-              color: _listening
-                  ? Theme.of(context).colorScheme.secondary
-                  : Theme.of(context).colorScheme.primary,
+      child: Tooltip(
+        message: _listening ? 'Stop voice typing' : 'Start voice typing',
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Center(
+            child: ScaleTransition(
+              scale: _pulseController,
+              child: Icon(
+                _listening ? Icons.mic : Icons.mic_none,
+                size: 20,
+                color: _listening
+                    ? Theme.of(context).colorScheme.secondary
+                    : Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
         ),
@@ -237,6 +243,15 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     _voiceEventsSubscription?.cancel();
     _voiceService = service;
     _voiceEventsSubscription = service.events.listen(_handleVoiceEvent);
+  }
+
+
+  Future<void> _handleMicTap() async {
+    if (_listening || _sessionOpen || _starting) {
+      await _stopOrQueueStop();
+      return;
+    }
+    await _handleMicLongPressStart(const LongPressStartDetails(globalPosition: Offset.zero));
   }
 
   Future<void> _handleMicLongPressStart(LongPressStartDetails _) async {

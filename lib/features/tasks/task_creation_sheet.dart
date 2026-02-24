@@ -178,6 +178,7 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
                     .setVoiceTypingAllowNetworkFallback(value);
               },
               textInputAction: TextInputAction.next,
+              alwaysShowMicButton: true,
               onTapOutside: (_) => FocusScope.of(context).unfocus(),
               onChanged: (_) {
                 if (_titleError != null || _saving) {
@@ -190,7 +191,7 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
               },
               decoration: InputDecoration(
                 labelText: 'Title',
-                hintText: 'What needs focus?',
+                hintText: 'What needs focus? Tap mic to talk.',
                 errorText: _titleError,
               ),
             ),
@@ -521,12 +522,13 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
                     .setVoiceTypingAllowNetworkFallback(value);
               },
               minLines: 3,
+              alwaysShowMicButton: true,
               maxLines: 5,
               onTapOutside: (_) => FocusScope.of(context).unfocus(),
               scrollPadding: const EdgeInsets.only(bottom: 180),
               decoration: const InputDecoration(
                 labelText: 'Description',
-                hintText: 'Optional context',
+                hintText: 'Optional context. Tap mic to dictate.',
               ),
             ),
             const SizedBox(height: 20),

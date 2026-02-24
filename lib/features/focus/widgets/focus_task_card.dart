@@ -159,7 +159,7 @@ class FocusTaskCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 112,
+              height: 148,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: palette.surfaceRaised,
@@ -174,20 +174,20 @@ class FocusTaskCard extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       SizedBox(
-                        width: 84,
-                        height: 84,
+                        width: 126,
+                        height: 126,
                         child: Stack(
                           alignment: Alignment.center,
                           children: <Widget>[
                             CircularProgressIndicator(
                               value: timerProgress,
-                              strokeWidth: 7,
+                              strokeWidth: 11,
                               backgroundColor: palette.surface,
                             ),
                             Text(
                               formatTimer(elapsedSeconds),
-                              style: textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
+                              style: textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ],
@@ -203,8 +203,8 @@ class FocusTaskCard extends StatelessWidget {
                               running ? 'Timer running' : 'Timer paused',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
+                              style: textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                             const SizedBox(height: 4),
