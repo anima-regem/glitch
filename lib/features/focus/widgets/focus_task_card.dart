@@ -21,6 +21,7 @@ class FocusTaskCard extends StatelessWidget {
     required this.habitWeeklyCompletions,
     required this.habitWeeklyTarget,
     required this.actions,
+    this.showTimerSection = true,
   });
 
   final TaskItem task;
@@ -35,6 +36,7 @@ class FocusTaskCard extends StatelessWidget {
   final int habitWeeklyCompletions;
   final int habitWeeklyTarget;
   final List<Widget> actions;
+  final bool showTimerSection;
 
   @override
   Widget build(BuildContext context) {
@@ -157,73 +159,78 @@ class FocusTaskCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 148,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: palette.surfaceRaised,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: palette.surfaceStroke),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+            if (showTimerSection) ...<Widget>[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 148,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: palette.surfaceRaised,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: palette.surfaceStroke),
                   ),
-                  child: Row(
-                    children: <Widget>[
-                      SizedBox(
-                        width: 126,
-                        height: 126,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: <Widget>[
-                            CircularProgressIndicator(
-                              value: timerProgress,
-                              strokeWidth: 11,
-                              backgroundColor: palette.surface,
-                            ),
-                            Text(
-                              formatTimer(elapsedSeconds),
-                              style: textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        SizedBox(
+                          width: 126,
+                          height: 126,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: <Widget>[
+                              CircularProgressIndicator(
+                                value: timerProgress,
+                                strokeWidth: 11,
+                                backgroundColor: palette.surface,
                               ),
-                            ),
-                          ],
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  formatTimer(elapsedSeconds),
+                                  style: textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: <Widget>[
-                            Text(
-                              running ? 'Timer running' : 'Timer paused',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              Text(
+                                running ? 'Timer running' : 'Timer paused',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _timerSubtitle(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: palette.textMuted,
+                              const SizedBox(height: 4),
+                              Text(
+                                _timerSubtitle(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: palette.textMuted,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: 10),
             ...actions,
           ],

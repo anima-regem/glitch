@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:glitch/core/utils/date_time_utils.dart';
 
 import '../../core/models/task.dart';
 import '../../core/theme/app_theme.dart';
@@ -123,108 +124,140 @@ class _FocusRunScreenState extends State<FocusRunScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                FocusTaskCard(
-                  task: widget.task,
-                  projectName: widget.projectName,
-                  elapsedSeconds: _elapsedSeconds,
-                  timerProgress: timerProgress,
-                  running: _running,
-                  targetMinutes: widget.targetMinutes,
-                  habitDoneToday: widget.habitDoneToday,
-                  habitStreak: widget.habitStreak,
-                  habitStreakUnit: widget.habitStreakUnit,
-                  habitWeeklyCompletions: widget.habitWeeklyCompletions,
-                  habitWeeklyTarget: widget.habitWeeklyTarget,
-                  actions: <Widget>[
-                    Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final panelHeight = min(
+                  380.0,
+                  max(190.0, constraints.maxHeight * 0.42),
+                ).toDouble();
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    Column(
                       children: <Widget>[
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              if (_running) {
-                                _pauseTimer();
-                              } else {
-                                _startTimer();
-                              }
-                            },
-                            icon: Icon(
-                              _running ? Icons.pause : Icons.play_arrow,
+                        SizedBox(
+                          height: panelHeight,
+                          child: Center(
+                            child: _FullscreenTimerPanel(
+                              elapsedSeconds: _elapsedSeconds,
+                              timerProgress: timerProgress,
+                              running: _running,
+                              targetMinutes: widget.targetMinutes,
                             ),
-                            label: Text(_running ? 'Pause' : 'Resume'),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        PopupMenuButton<FocusRunMenuAction>(
-                          tooltip: 'Task actions',
-                          onSelected: (value) {
-                            switch (value) {
-                              case FocusRunMenuAction.edit:
-                                _pauseTimer();
-                                _closeWithResult(
-                                  FocusRunResult(
-                                    taskId: widget.task.id,
-                                    elapsedSeconds: _elapsedSeconds,
-                                    running: false,
-                                    requestedEdit: true,
-                                    habitDoneAtLaunch: widget.habitDoneToday,
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: FocusTaskCard(
+                            task: widget.task,
+                            projectName: widget.projectName,
+                            elapsedSeconds: _elapsedSeconds,
+                            timerProgress: timerProgress,
+                            running: _running,
+                            targetMinutes: widget.targetMinutes,
+                            habitDoneToday: widget.habitDoneToday,
+                            habitStreak: widget.habitStreak,
+                            habitStreakUnit: widget.habitStreakUnit,
+                            habitWeeklyCompletions:
+                                widget.habitWeeklyCompletions,
+                            habitWeeklyTarget: widget.habitWeeklyTarget,
+                            showTimerSection: false,
+                            actions: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      onPressed: () {
+                                        if (_running) {
+                                          _pauseTimer();
+                                        } else {
+                                          _startTimer();
+                                        }
+                                      },
+                                      icon: Icon(
+                                        _running
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                      ),
+                                      label: Text(
+                                        _running ? 'Pause' : 'Resume',
+                                      ),
+                                    ),
                                   ),
-                                );
-                                break;
-                              case FocusRunMenuAction.delete:
-                                _pauseTimer();
-                                _closeWithResult(
-                                  FocusRunResult(
-                                    taskId: widget.task.id,
-                                    elapsedSeconds: _elapsedSeconds,
-                                    running: false,
-                                    requestedDelete: true,
-                                    habitDoneAtLaunch: widget.habitDoneToday,
+                                  const SizedBox(width: 8),
+                                  PopupMenuButton<FocusRunMenuAction>(
+                                    tooltip: 'Task actions',
+                                    onSelected: (value) {
+                                      switch (value) {
+                                        case FocusRunMenuAction.edit:
+                                          _pauseTimer();
+                                          _closeWithResult(
+                                            FocusRunResult(
+                                              taskId: widget.task.id,
+                                              elapsedSeconds: _elapsedSeconds,
+                                              running: false,
+                                              requestedEdit: true,
+                                              habitDoneAtLaunch:
+                                                  widget.habitDoneToday,
+                                            ),
+                                          );
+                                          break;
+                                        case FocusRunMenuAction.delete:
+                                          _pauseTimer();
+                                          _closeWithResult(
+                                            FocusRunResult(
+                                              taskId: widget.task.id,
+                                              elapsedSeconds: _elapsedSeconds,
+                                              running: false,
+                                              requestedDelete: true,
+                                              habitDoneAtLaunch:
+                                                  widget.habitDoneToday,
+                                            ),
+                                          );
+                                          break;
+                                      }
+                                    },
+                                    itemBuilder: (context) =>
+                                        const <
+                                          PopupMenuEntry<FocusRunMenuAction>
+                                        >[
+                                          PopupMenuItem<FocusRunMenuAction>(
+                                            value: FocusRunMenuAction.edit,
+                                            child: Text('Edit'),
+                                          ),
+                                          PopupMenuItem<FocusRunMenuAction>(
+                                            value: FocusRunMenuAction.delete,
+                                            child: Text('Delete'),
+                                          ),
+                                        ],
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 6,
+                                      ),
+                                      child: Icon(Icons.more_horiz),
+                                    ),
                                   ),
-                                );
-                                break;
-                            }
-                          },
-                          itemBuilder: (context) =>
-                              const <PopupMenuEntry<FocusRunMenuAction>>[
-                                PopupMenuItem<FocusRunMenuAction>(
-                                  value: FocusRunMenuAction.edit,
-                                  child: Text('Edit'),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton(
+                                  onPressed: _onPrimaryAction,
+                                  child: Text(widget.primaryLabel),
                                 ),
-                                PopupMenuItem<FocusRunMenuAction>(
-                                  value: FocusRunMenuAction.delete,
-                                  child: Text('Delete'),
-                                ),
-                              ],
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            child: Icon(Icons.more_horiz),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _onPrimaryAction,
-                        child: Text(widget.primaryLabel),
-                      ),
-                    ),
+                    _CelebrationLayer(visible: _showCelebration),
                   ],
-                ),
-                _FullscreenTimerOverlay(
-                  elapsedSeconds: _elapsedSeconds,
-                  timerProgress: timerProgress,
-                  running: _running,
-                ),
-                _CelebrationLayer(visible: _showCelebration),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -302,72 +335,121 @@ class _FocusRunScreenState extends State<FocusRunScreen> {
   }
 }
 
-class _FullscreenTimerOverlay extends StatelessWidget {
-  const _FullscreenTimerOverlay({
+class _FullscreenTimerPanel extends StatelessWidget {
+  const _FullscreenTimerPanel({
     required this.elapsedSeconds,
     required this.timerProgress,
     required this.running,
+    required this.targetMinutes,
   });
 
   final int elapsedSeconds;
   final double timerProgress;
   final bool running;
+  final int? targetMinutes;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.glitchPalette;
-    return IgnorePointer(
-      ignoring: true,
-      child: Center(
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 300),
-          scale: running ? 1 : 0.96,
-          curve: Curves.easeOutBack,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 280),
-            opacity: running ? 0.94 : 0.72,
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: palette.surface.withValues(alpha: 0.42),
-                border: Border.all(color: palette.surfaceStroke, width: 1.5),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: <Widget>[
-                  SizedBox(
-                    width: 222,
-                    height: 222,
-                    child: CircularProgressIndicator(
-                      value: timerProgress,
-                      strokeWidth: 14,
-                      backgroundColor: palette.surfaceRaised,
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 300),
+      scale: running ? 1 : 0.97,
+      curve: Curves.easeOutBack,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 260),
+        opacity: running ? 1 : 0.85,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            color: palette.surface.withValues(alpha: 0.6),
+            border: Border.all(color: palette.surfaceStroke),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, timerBox) {
+                          final diameter = min(
+                            timerBox.maxWidth,
+                            timerBox.maxHeight,
+                          ).clamp(72.0, 300.0).toDouble();
+                          final ringSize = max(
+                            48.0,
+                            diameter - (diameter >= 220 ? 20 : 16),
+                          );
+                          final strokeWidth = diameter >= 220 ? 16.0 : 12.0;
+
+                          return Center(
+                            child: SizedBox(
+                              width: diameter,
+                              height: diameter,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: <Widget>[
+                                  SizedBox(
+                                    width: ringSize,
+                                    height: ringSize,
+                                    child: CircularProgressIndicator(
+                                      value: timerProgress,
+                                      strokeWidth: strokeWidth,
+                                      backgroundColor: palette.surfaceRaised,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        formatTimer(elapsedSeconds),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .displayMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        formatTimer(elapsedSeconds),
-                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                    const SizedBox(height: 8),
+                    Text(
+                      running ? 'Timer running' : 'Timer paused',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: palette.textPrimary,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        running ? 'FOCUS RUNNING' : 'PAUSED',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          letterSpacing: 1.2,
-                          color: palette.textMuted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      targetMinutes == null
+                          ? 'No estimate set'
+                          : 'Target $targetMinutes min',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
