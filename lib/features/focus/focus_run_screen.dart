@@ -218,6 +218,11 @@ class _FocusRunScreenState extends State<FocusRunScreen> {
                     ),
                   ],
                 ),
+                _FullscreenTimerOverlay(
+                  elapsedSeconds: _elapsedSeconds,
+                  timerProgress: timerProgress,
+                  running: _running,
+                ),
                 _CelebrationLayer(visible: _showCelebration),
               ],
             ),
@@ -294,6 +299,80 @@ class _FocusRunScreenState extends State<FocusRunScreen> {
       return;
     }
     Navigator.of(context).pop(result);
+  }
+}
+
+class _FullscreenTimerOverlay extends StatelessWidget {
+  const _FullscreenTimerOverlay({
+    required this.elapsedSeconds,
+    required this.timerProgress,
+    required this.running,
+  });
+
+  final int elapsedSeconds;
+  final double timerProgress;
+  final bool running;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.glitchPalette;
+    return IgnorePointer(
+      ignoring: true,
+      child: Center(
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 300),
+          scale: running ? 1 : 0.96,
+          curve: Curves.easeOutBack,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 280),
+            opacity: running ? 0.94 : 0.72,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: palette.surface.withValues(alpha: 0.42),
+                border: Border.all(color: palette.surfaceStroke, width: 1.5),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: <Widget>[
+                  SizedBox(
+                    width: 222,
+                    height: 222,
+                    child: CircularProgressIndicator(
+                      value: timerProgress,
+                      strokeWidth: 14,
+                      backgroundColor: palette.surfaceRaised,
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        formatTimer(elapsedSeconds),
+                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        running ? 'FOCUS RUNNING' : 'PAUSED',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          letterSpacing: 1.2,
+                          color: palette.textMuted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

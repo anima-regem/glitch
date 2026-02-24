@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/task.dart';
+import '../../core/services/task_audio_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_time_utils.dart';
 
-class TaskCard extends StatefulWidget {
+class TaskCard extends ConsumerStatefulWidget {
   const TaskCard({
     super.key,
     required this.task,
@@ -27,10 +29,29 @@ class TaskCard extends StatefulWidget {
   final List<DateTime> habitCompletionDates;
 
   @override
-  State<TaskCard> createState() => _TaskCardState();
+  ConsumerState<TaskCard> createState() => _TaskCardState();
 }
 
-class _TaskCardState extends State<TaskCard> {
+class _TaskCardState extends ConsumerState<TaskCard> {
+  bool _playingAudio = false;
+
+  Future<void> _playTaskAudio() async {
+    if (_playingAudio) {
+      return;
+    }
+    setState(() => _playingAudio = true);
+    try {
+      await ref.read(taskAudioServiceProvider).speakTaskText(
+            title: widget.task.title,
+            description: widget.task.description,
+          );
+    } finally {
+      if (mounted) {
+        setState(() => _playingAudio = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.glitchPalette;
@@ -67,11 +88,30 @@ class _TaskCardState extends State<TaskCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      task.title,
-                      softWrap: true,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            softWrap: true,
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.12,
+                                ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: _playingAudio
+                              ? 'Playing audio...'
+                              : 'Play source audio',
+                          onPressed: _playingAudio ? null : _playTaskAudio,
+                          icon: Icon(
+                            _playingAudio ? Icons.volume_up : Icons.play_arrow,
+                          ),
+                        ),
+                      ],
                     ),
                     if (task.description != null &&
                         task.description!.trim().isNotEmpty)
