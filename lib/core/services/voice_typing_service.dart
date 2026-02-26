@@ -17,6 +17,17 @@ enum VoiceTypingStartFailure {
   listenFailed,
 }
 
+enum VoiceTypingErrorReason {
+  unknown,
+  unsupported,
+  recognizerUnavailable,
+  permissionDenied,
+  permissionPermanentlyDenied,
+  network,
+  languageUnavailable,
+  noMatch,
+}
+
 class VoiceTypingAvailability {
   const VoiceTypingAvailability({
     required this.supported,
@@ -36,6 +47,7 @@ class VoiceTypingStartResult {
     this.failure,
     this.message,
     this.supportsFallbackHint = false,
+    this.errorReason = VoiceTypingErrorReason.unknown,
   });
 
   final bool started;
@@ -43,6 +55,7 @@ class VoiceTypingStartResult {
   final VoiceTypingStartFailure? failure;
   final String? message;
   final bool supportsFallbackHint;
+  final VoiceTypingErrorReason errorReason;
 }
 
 abstract class VoiceTypingEvent {
@@ -65,10 +78,12 @@ class VoiceTypingEventError extends VoiceTypingEvent {
   const VoiceTypingEventError(
     this.message, {
     this.supportsFallbackHint = false,
+    this.reason = VoiceTypingErrorReason.unknown,
   });
 
   final String message;
   final bool supportsFallbackHint;
+  final VoiceTypingErrorReason reason;
 }
 
 class VoiceTypingEventStatus extends VoiceTypingEvent {
@@ -128,12 +143,13 @@ class NativeVoiceTypingService implements VoiceTypingService {
         onStatus: _handleStatus,
         onError: _handleError,
       );
-    } catch (error) {
+    } catch (_) {
       _initialized = false;
       _events.add(
-        VoiceTypingEventError(
-          'Speech engine initialization failed: $error',
+        const VoiceTypingEventError(
+          'Speech engine initialization failed. Speech recognition service may be unavailable on this device.',
           supportsFallbackHint: false,
+          reason: VoiceTypingErrorReason.recognizerUnavailable,
         ),
       );
       _events.add(const VoiceTypingEventStatus(VoiceTypingStatus.unavailable));
@@ -144,7 +160,7 @@ class NativeVoiceTypingService implements VoiceTypingService {
       return const VoiceTypingAvailability(
         supported: false,
         initialized: false,
-        message: 'Speech recognition is unavailable on this device.',
+        message: 'Speech recognition service is unavailable on this device.',
       );
     }
 
@@ -162,6 +178,7 @@ class NativeVoiceTypingService implements VoiceTypingService {
         usingOnDevice: false,
         failure: VoiceTypingStartFailure.unsupported,
         message: 'Voice typing is currently available on Android only.',
+        errorReason: VoiceTypingErrorReason.unsupported,
       );
     }
 
@@ -176,6 +193,9 @@ class NativeVoiceTypingService implements VoiceTypingService {
 
     final permission = await _ensureMicrophonePermission();
     if (!permission.granted) {
+      final reason = permission.permanentlyDenied
+          ? VoiceTypingErrorReason.permissionPermanentlyDenied
+          : VoiceTypingErrorReason.permissionDenied;
       return VoiceTypingStartResult(
         started: false,
         usingOnDevice: false,
@@ -183,17 +203,20 @@ class NativeVoiceTypingService implements VoiceTypingService {
             ? VoiceTypingStartFailure.permissionPermanentlyDenied
             : VoiceTypingStartFailure.permissionDenied,
         message: permission.message,
+        errorReason: reason,
       );
     }
 
     final availability = await initialize();
     if (!availability.supported || !availability.initialized) {
+      final reason = _reasonFromAvailabilityMessage(availability.message);
       return VoiceTypingStartResult(
         started: false,
         usingOnDevice: false,
         failure: VoiceTypingStartFailure.initializeFailed,
         message:
             availability.message ?? 'Speech recognition is not available yet.',
+        errorReason: reason,
       );
     }
 
@@ -212,23 +235,36 @@ class NativeVoiceTypingService implements VoiceTypingService {
         listenOptions: options,
       );
       if (!started) {
+        final reason = onDevicePreferred
+            ? VoiceTypingErrorReason.languageUnavailable
+            : VoiceTypingErrorReason.recognizerUnavailable;
         return VoiceTypingStartResult(
           started: false,
           usingOnDevice: false,
           failure: VoiceTypingStartFailure.listenFailed,
-          message: onDevicePreferred
-              ? 'On-device speech mode is unavailable for this language/device.'
-              : 'Unable to start speech recognition right now.',
-          supportsFallbackHint: onDevicePreferred,
+          message: _messageForListenFailure(
+            onDevicePreferred: onDevicePreferred,
+            reason: reason,
+          ),
+          supportsFallbackHint:
+              onDevicePreferred && _supportsFallbackForReason(reason),
+          errorReason: reason,
         );
       }
     } catch (error) {
+      final reason = _errorReasonFromException(error);
       return VoiceTypingStartResult(
         started: false,
         usingOnDevice: false,
         failure: VoiceTypingStartFailure.listenFailed,
-        message: 'Unable to start voice typing: $error',
-        supportsFallbackHint: onDevicePreferred,
+        message: _messageForListenFailure(
+          onDevicePreferred: onDevicePreferred,
+          reason: reason,
+          error: error,
+        ),
+        supportsFallbackHint:
+            onDevicePreferred && _supportsFallbackForReason(reason),
+        errorReason: reason,
       );
     }
 
@@ -305,10 +341,12 @@ class NativeVoiceTypingService implements VoiceTypingService {
   }
 
   void _handleError(SpeechRecognitionError error) {
+    final reason = _errorReasonFromCode(error.errorMsg);
     _events.add(
       VoiceTypingEventError(
-        _humanizeError(error.errorMsg),
-        supportsFallbackHint: _isFallbackLikely(error.errorMsg),
+        _humanizeError(error.errorMsg, reason: reason),
+        supportsFallbackHint: _supportsFallbackForReason(reason),
+        reason: reason,
       ),
     );
     if (error.permanent) {
@@ -316,37 +354,160 @@ class NativeVoiceTypingService implements VoiceTypingService {
     }
   }
 
-  bool _isFallbackLikely(String message) {
+  bool _supportsFallbackForReason(VoiceTypingErrorReason reason) {
     if (!_lastListenRequestedOnDevice) {
       return false;
     }
-    final normalized = message.toLowerCase();
-    return normalized.contains('language') ||
-        normalized.contains('unavailable') ||
-        normalized.contains('not supported') ||
-        normalized.contains('network') ||
-        normalized.contains('server') ||
-        normalized.contains('no_match');
+    return reason == VoiceTypingErrorReason.languageUnavailable ||
+        reason == VoiceTypingErrorReason.network ||
+        reason == VoiceTypingErrorReason.noMatch ||
+        reason == VoiceTypingErrorReason.recognizerUnavailable;
   }
 
-  String _humanizeError(String code) {
-    final normalized = code.trim();
-    if (normalized.isEmpty) {
-      return 'Voice typing failed. Please try again.';
+  VoiceTypingErrorReason _reasonFromAvailabilityMessage(String? message) {
+    final normalized = (message ?? '').trim().toLowerCase();
+    if (normalized.contains('android only')) {
+      return VoiceTypingErrorReason.unsupported;
     }
+    if (normalized.contains('unavailable')) {
+      return VoiceTypingErrorReason.recognizerUnavailable;
+    }
+    return VoiceTypingErrorReason.unknown;
+  }
 
+  VoiceTypingErrorReason _errorReasonFromCode(String code) {
+    final normalized = code.trim().toLowerCase();
     switch (normalized) {
       case 'error_permission':
-        return 'Microphone permission is required for voice typing.';
+        return VoiceTypingErrorReason.permissionDenied;
       case 'error_network':
       case 'error_network_timeout':
-        return 'Network error while recognizing speech.';
+      case 'network':
+        return VoiceTypingErrorReason.network;
       case 'error_language_not_supported':
       case 'error_language_unavailable':
-        return 'Speech language is unavailable on this device.';
+        return VoiceTypingErrorReason.languageUnavailable;
       case 'error_no_match':
-        return 'No speech was detected.';
+      case 'error_speech_timeout':
+        return VoiceTypingErrorReason.noMatch;
       default:
+        if (normalized.contains('permission')) {
+          return VoiceTypingErrorReason.permissionDenied;
+        }
+        if (normalized.contains('network') ||
+            normalized.contains('server') ||
+            normalized.contains('timeout')) {
+          return VoiceTypingErrorReason.network;
+        }
+        if (normalized.contains('language') ||
+            normalized.contains('not supported')) {
+          return VoiceTypingErrorReason.languageUnavailable;
+        }
+        if (normalized.contains('recognition service') ||
+            normalized.contains('recognizer') ||
+            normalized.contains('unavailable') ||
+            normalized.contains('not available')) {
+          return VoiceTypingErrorReason.recognizerUnavailable;
+        }
+        if (normalized.contains('no_match') ||
+            normalized.contains('no match')) {
+          return VoiceTypingErrorReason.noMatch;
+        }
+        return VoiceTypingErrorReason.unknown;
+    }
+  }
+
+  VoiceTypingErrorReason _errorReasonFromException(Object error) {
+    final normalized = error.toString().trim().toLowerCase();
+    // Some speech_to_text platform implementations return a null bool when
+    // on-device mode is unsupported for a recognizer/language.
+    if (normalized.contains("type 'null' is not a subtype of type 'bool'") ||
+        normalized.contains('null is not a subtype of type bool')) {
+      return VoiceTypingErrorReason.recognizerUnavailable;
+    }
+    if (normalized.contains('permanent') && normalized.contains('permission')) {
+      return VoiceTypingErrorReason.permissionPermanentlyDenied;
+    }
+    if (normalized.contains('permission')) {
+      return VoiceTypingErrorReason.permissionDenied;
+    }
+    if (normalized.contains('network') ||
+        normalized.contains('server') ||
+        normalized.contains('timeout')) {
+      return VoiceTypingErrorReason.network;
+    }
+    if (normalized.contains('language') ||
+        normalized.contains('not supported')) {
+      return VoiceTypingErrorReason.languageUnavailable;
+    }
+    if (normalized.contains('no_match') || normalized.contains('no match')) {
+      return VoiceTypingErrorReason.noMatch;
+    }
+    if (normalized.contains('recognition service') ||
+        normalized.contains('recognizer') ||
+        normalized.contains('unavailable') ||
+        normalized.contains('not available')) {
+      return VoiceTypingErrorReason.recognizerUnavailable;
+    }
+    return VoiceTypingErrorReason.unknown;
+  }
+
+  String _messageForListenFailure({
+    required bool onDevicePreferred,
+    required VoiceTypingErrorReason reason,
+    Object? error,
+  }) {
+    if (onDevicePreferred) {
+      switch (reason) {
+        case VoiceTypingErrorReason.languageUnavailable:
+          return 'On-device speech mode is unavailable for this language or device.';
+        case VoiceTypingErrorReason.network:
+          return 'On-device speech failed due to a network issue.';
+        case VoiceTypingErrorReason.recognizerUnavailable:
+          return 'Speech recognition service is unavailable on this device.';
+        default:
+          return error == null
+              ? 'Unable to start on-device voice typing right now.'
+              : 'Unable to start on-device voice typing: $error';
+      }
+    }
+
+    switch (reason) {
+      case VoiceTypingErrorReason.network:
+        return 'Fallback speech mode could not start due to a network issue.';
+      case VoiceTypingErrorReason.permissionDenied:
+        return 'Microphone permission is required for voice typing.';
+      case VoiceTypingErrorReason.permissionPermanentlyDenied:
+        return 'Microphone permission is required for voice typing. Open system settings to allow it.';
+      case VoiceTypingErrorReason.recognizerUnavailable:
+        return 'Fallback speech recognition is unavailable on this device.';
+      default:
+        return error == null
+            ? 'Unable to start fallback speech recognition right now.'
+            : 'Unable to start fallback speech recognition: $error';
+    }
+  }
+
+  String _humanizeError(String code, {required VoiceTypingErrorReason reason}) {
+    switch (reason) {
+      case VoiceTypingErrorReason.permissionDenied:
+        return 'Microphone permission is required for voice typing.';
+      case VoiceTypingErrorReason.permissionPermanentlyDenied:
+        return 'Microphone permission is required for voice typing. Open system settings to allow it.';
+      case VoiceTypingErrorReason.network:
+        return 'Network error while recognizing speech.';
+      case VoiceTypingErrorReason.languageUnavailable:
+        return 'Speech language is unavailable on this device.';
+      case VoiceTypingErrorReason.noMatch:
+        return 'No speech was detected.';
+      case VoiceTypingErrorReason.recognizerUnavailable:
+        return 'Speech recognition service is unavailable on this device.';
+      case VoiceTypingErrorReason.unsupported:
+      case VoiceTypingErrorReason.unknown:
+        final normalized = code.trim();
+        if (normalized.isEmpty) {
+          return 'Voice typing failed. Please try again.';
+        }
         return 'Voice typing failed: $normalized';
     }
   }

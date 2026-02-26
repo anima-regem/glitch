@@ -67,8 +67,18 @@ class _FakeVoiceTypingService implements VoiceTypingService {
     _events.add(VoiceTypingEventFinal(text));
   }
 
-  void emitError(String message) {
-    _events.add(VoiceTypingEventError(message));
+  void emitError(
+    String message, {
+    bool supportsFallbackHint = false,
+    VoiceTypingErrorReason reason = VoiceTypingErrorReason.unknown,
+  }) {
+    _events.add(
+      VoiceTypingEventError(
+        message,
+        supportsFallbackHint: supportsFallbackHint,
+        reason: reason,
+      ),
+    );
   }
 
   @override
@@ -167,7 +177,7 @@ void main() {
     expect(find.byIcon(Icons.mic_none), findsNothing);
   });
 
-  testWidgets('hold-to-talk streams partial transcript and stops on release', (
+  testWidgets('mic tap streams partial transcript and stops on second tap', (
     tester,
   ) async {
     final service = _FakeVoiceTypingService();
@@ -188,8 +198,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final mic = find.byIcon(Icons.mic_none);
-    final gesture = await tester.startGesture(tester.getCenter(mic));
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.tap(mic);
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(service.onDeviceStartCalls, 1);
     expect(find.byIcon(Icons.mic), findsOneWidget);
@@ -198,7 +208,7 @@ void main() {
     await tester.pump();
     expect(controller.text, 'Buy groceries tomorrow');
 
-    await gesture.up();
+    await tester.tap(find.byIcon(Icons.mic));
     await tester.pumpAndSettle();
     expect(service.stopCalls, greaterThanOrEqualTo(1));
   });
@@ -240,21 +250,17 @@ void main() {
     await tester.pumpAndSettle();
 
     final mic = find.byIcon(Icons.mic_none);
-    final gesture = await tester.startGesture(tester.getCenter(mic));
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.tap(mic);
     await tester.pumpAndSettle();
 
     expect(find.text('Fallback speech mode?'), findsOneWidget);
 
     await tester.tap(find.text('Allow fallback'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(persistedFallbackConsent, isTrue);
     expect(service.onDeviceStartCalls, 1);
     expect(service.fallbackStartCalls, 1);
-
-    await gesture.up();
-    await tester.pumpAndSettle();
   });
 
   testWidgets('voice typing failures surface inline and in snackbar', (
@@ -283,13 +289,96 @@ void main() {
     await tester.pumpAndSettle();
 
     final mic = find.byIcon(Icons.mic_none);
-    await tester.longPress(mic);
+    await tester.tap(mic);
     await tester.pumpAndSettle();
 
     expect(
       find.text('Microphone permission is required for voice typing.'),
       findsWidgets,
     );
+  });
+
+  testWidgets(
+    'runtime on-device error retries fallback once when fallback is allowed',
+    (tester) async {
+      final service = _FakeVoiceTypingService();
+      final controller = TextEditingController();
+      final focusNode = FocusNode();
+      addTearDown(controller.dispose);
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        _buildVoiceTypingHarness(
+          service: service,
+          controller: controller,
+          focusNode: focusNode,
+          allowNetworkFallback: true,
+        ),
+      );
+
+      await tester.tap(_textFieldByLabel('Title'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.mic_none));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(service.onDeviceStartCalls, 1);
+
+      service.emitError(
+        'Speech language is unavailable on this device.',
+        supportsFallbackHint: true,
+        reason: VoiceTypingErrorReason.languageUnavailable,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(service.stopCalls, greaterThanOrEqualTo(1));
+      expect(service.fallbackStartCalls, 1);
+
+      service.emitError(
+        'Speech language is unavailable on this device.',
+        supportsFallbackHint: true,
+        reason: VoiceTypingErrorReason.languageUnavailable,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(service.fallbackStartCalls, 1);
+    },
+  );
+
+  testWidgets('recognizer unavailable shows keyboard dictation guidance', (
+    tester,
+  ) async {
+    final service = _FakeVoiceTypingService();
+    service.onDeviceResult = const VoiceTypingStartResult(
+      started: false,
+      usingOnDevice: false,
+      failure: VoiceTypingStartFailure.initializeFailed,
+      message: 'Speech recognition service is unavailable on this device.',
+      errorReason: VoiceTypingErrorReason.recognizerUnavailable,
+    );
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      _buildVoiceTypingHarness(
+        service: service,
+        controller: controller,
+        focusNode: focusNode,
+      ),
+    );
+
+    await tester.tap(_textFieldByLabel('Title'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.mic_none));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Use keyboard voice typing'), findsOneWidget);
+    expect(find.text('Got it'), findsOneWidget);
+
+    await tester.tap(find.text('Got it'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(

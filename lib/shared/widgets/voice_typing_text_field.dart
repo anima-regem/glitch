@@ -75,6 +75,8 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
   static const String _finalizingLabel = 'Finishing dictation...';
   static const String _fallbackLabel =
       'Listening in fallback mode (speech may use network).';
+  static const String _retryingFallbackLabel =
+      'Retrying with fallback speech mode...';
 
   late final FocusNode _effectiveFocusNode;
   late final bool _ownsFocusNode;
@@ -89,6 +91,9 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
   bool _starting = false;
   bool _stopAfterStart = false;
   bool _usingFallback = false;
+  bool _fallbackRetryAttempted = false;
+  bool _recoveringToFallback = false;
+  bool _keyboardGuideShownForAttempt = false;
 
   String? _statusText;
   String? _voiceErrorText;
@@ -110,7 +115,8 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
         !widget.obscureText;
   }
 
-  bool get _showMicButton => _voiceAvailable && (widget.alwaysShowMicButton || _fieldFocused);
+  bool get _showMicButton =>
+      _voiceAvailable && (widget.alwaysShowMicButton || _fieldFocused);
 
   @override
   void initState() {
@@ -245,13 +251,14 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     _voiceEventsSubscription = service.events.listen(_handleVoiceEvent);
   }
 
-
   Future<void> _handleMicTap() async {
     if (_listening || _sessionOpen || _starting) {
       await _stopOrQueueStop();
       return;
     }
-    await _handleMicLongPressStart(const LongPressStartDetails(globalPosition: Offset.zero));
+    await _handleMicLongPressStart(
+      const LongPressStartDetails(globalPosition: Offset.zero),
+    );
   }
 
   Future<void> _handleMicLongPressStart(LongPressStartDetails _) async {
@@ -270,7 +277,11 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       _usingFallback = false;
     });
 
+    _fallbackRetryAttempted = false;
+    _recoveringToFallback = false;
+    _keyboardGuideShownForAttempt = false;
     _captureBaseline();
+
     final onDeviceResult = await _voiceService!.startListening(
       onDevicePreferred: true,
       partialResults: true,
@@ -291,38 +302,20 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     }
 
     var didStartFallback = false;
-    var failureHandled = false;
     if (onDeviceResult.supportsFallbackHint) {
-      final shouldUseFallback = await _shouldUseNetworkFallback();
-      if (shouldUseFallback) {
-        final fallbackResult = await _voiceService!.startListening(
-          onDevicePreferred: false,
-          partialResults: true,
-        );
-        if (!mounted) {
-          return;
-        }
-        if (fallbackResult.started) {
-          _openSession(usingFallback: true);
-          didStartFallback = true;
-          _starting = false;
-          if (_stopAfterStart) {
-            _stopAfterStart = false;
-            await _stopSession();
-          }
-        } else {
-          _setVoiceError(
-            fallbackResult.message ??
-                'Unable to start fallback speech recognition.',
-          );
-          failureHandled = true;
-        }
-      }
+      didStartFallback = await _tryFallbackStart(
+        onFallbackDeclinedError: onDeviceResult.message,
+      );
     }
 
-    if (!didStartFallback && !failureHandled && mounted) {
-      _starting = false;
-      _setVoiceError(onDeviceResult.message ?? 'Unable to start voice typing.');
+    if (didStartFallback || !mounted) {
+      return;
+    }
+
+    _starting = false;
+    _setVoiceError(onDeviceResult.message ?? 'Unable to start voice typing.');
+    if (_shouldOfferKeyboardGuideForStartResult(onDeviceResult)) {
+      unawaited(_showKeyboardDictationGuide());
     }
   }
 
@@ -376,8 +369,15 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     }
 
     if (event is VoiceTypingEventError) {
-      if (_sessionOpen || _starting) {
+      if (_shouldAttemptRuntimeFallback(event)) {
+        unawaited(_recoverFromOnDeviceError(event));
+        return;
+      }
+      if (_sessionOpen || _starting || _recoveringToFallback) {
         _setVoiceError(event.message);
+        if (_shouldOfferKeyboardGuideForError(event)) {
+          unawaited(_showKeyboardDictationGuide());
+        }
       }
       return;
     }
@@ -395,13 +395,15 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       }
 
       if (event.status == VoiceTypingStatus.stopped) {
-        if (_sessionOpen || _starting || _listening) {
+        if (_sessionOpen || _starting || _listening || _recoveringToFallback) {
           setState(() {
             _sessionOpen = false;
-            _starting = false;
             _listening = false;
             _usingFallback = false;
-            _statusText = null;
+            if (!_recoveringToFallback) {
+              _starting = false;
+              _statusText = null;
+            }
           });
           _pulseController.stop();
           _pulseController.value = 1;
@@ -409,7 +411,10 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
         return;
       }
 
-      _setVoiceError('Speech recognition is unavailable on this device.');
+      _setVoiceError(
+        'Speech recognition service is unavailable on this device.',
+      );
+      unawaited(_showKeyboardDictationGuide());
     }
   }
 
@@ -421,6 +426,7 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       _voiceErrorText = null;
       _statusText = usingFallback ? _fallbackLabel : _listeningLabel;
     });
+    _recoveringToFallback = false;
     _pulseController.repeat(reverse: true);
   }
 
@@ -436,6 +442,7 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       _sessionOpen = false;
       _listening = false;
       _usingFallback = false;
+      _recoveringToFallback = false;
       _statusText = null;
       _voiceErrorText = message;
     });
@@ -448,6 +455,132 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       return;
     }
     messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  bool _shouldAttemptRuntimeFallback(VoiceTypingEventError event) {
+    return _sessionOpen &&
+        !_usingFallback &&
+        !_recoveringToFallback &&
+        !_fallbackRetryAttempted &&
+        event.supportsFallbackHint;
+  }
+
+  Future<void> _recoverFromOnDeviceError(VoiceTypingEventError event) async {
+    if (_voiceService == null) {
+      return;
+    }
+
+    _fallbackRetryAttempted = true;
+    _recoveringToFallback = true;
+    setState(() {
+      _starting = true;
+      _listening = false;
+      _statusText = _retryingFallbackLabel;
+    });
+    _pulseController.stop();
+    _pulseController.value = 1;
+
+    await _voiceService!.stopListening();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _sessionOpen = false;
+      _listening = false;
+      _usingFallback = false;
+      _statusText = _retryingFallbackLabel;
+      _starting = true;
+    });
+
+    final didStartFallback = await _tryFallbackStart(
+      onFallbackDeclinedError: event.message,
+    );
+    if (!didStartFallback && _shouldOfferKeyboardGuideForError(event)) {
+      await _showKeyboardDictationGuide();
+    }
+  }
+
+  Future<bool> _tryFallbackStart({String? onFallbackDeclinedError}) async {
+    if (_voiceService == null) {
+      return false;
+    }
+
+    final shouldUseFallback = await _shouldUseNetworkFallback();
+    if (!shouldUseFallback) {
+      _recoveringToFallback = false;
+      _starting = false;
+      if (onFallbackDeclinedError != null &&
+          onFallbackDeclinedError.isNotEmpty) {
+        _setVoiceError(onFallbackDeclinedError);
+      }
+      return false;
+    }
+
+    final fallbackResult = await _voiceService!.startListening(
+      onDevicePreferred: false,
+      partialResults: true,
+    );
+    if (!mounted) {
+      return false;
+    }
+
+    if (fallbackResult.started) {
+      _openSession(usingFallback: true);
+      _starting = false;
+      if (_stopAfterStart) {
+        _stopAfterStart = false;
+        await _stopSession();
+      }
+      return true;
+    }
+
+    _starting = false;
+    _recoveringToFallback = false;
+    _setVoiceError(
+      fallbackResult.message ?? 'Unable to start fallback speech recognition.',
+    );
+    if (_shouldOfferKeyboardGuideForStartResult(fallbackResult)) {
+      unawaited(_showKeyboardDictationGuide());
+    }
+    return false;
+  }
+
+  bool _shouldOfferKeyboardGuideForStartResult(VoiceTypingStartResult result) {
+    return result.errorReason == VoiceTypingErrorReason.recognizerUnavailable ||
+        result.failure == VoiceTypingStartFailure.initializeFailed;
+  }
+
+  bool _shouldOfferKeyboardGuideForError(VoiceTypingEventError event) {
+    return event.reason == VoiceTypingErrorReason.recognizerUnavailable;
+  }
+
+  Future<void> _showKeyboardDictationGuide() async {
+    if (!mounted || _keyboardGuideShownForAttempt) {
+      return;
+    }
+    _keyboardGuideShownForAttempt = true;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Use keyboard voice typing'),
+          content: const Text(
+            'Speech recognition service is unavailable right now.\n\n'
+            'You can still dictate using your keyboard mic:\n'
+            '1. Focus this text field.\n'
+            '2. Tap the microphone on your keyboard (for example Gboard).\n'
+            '3. Speak and continue typing as needed.',
+          ),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Got it'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _captureBaseline() {
