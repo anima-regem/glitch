@@ -14,46 +14,57 @@
   <p>Local-first, single-focus day tracker for calm, consistent execution.</p>
 </div>
 
+## Status
+- Version in source: `1.0.3+3`
+- Platforms: Android, iOS
+- Voice typing: Android only (on-device first, optional fallback mode)
+
 ## Product Overview
-Glitch helps people plan less, do more, and recover quickly on low-energy days. It is built for users who want daily momentum without noisy dashboards, aggressive gamification, or account-heavy workflows.
+Glitch is a local-first Flutter app for daily execution with minimal friction: pick one task, run focus sessions, and keep momentum across chores, habits, and project milestones.
 
-## What You Use It For
-- Running focused daily sessions on one task at a time.
-- Managing chores, habits, and project work in one lightweight app.
-- Tracking completion history with reflective, non-punitive feedback.
-- Planning tomorrow with minimal friction at the end of the day.
+## Core Experience
+- **Focus**
+  - Swipe through today's tasks (including due and overdue items).
+  - Full-screen focus run mode with pause/resume and timer continuity.
+  - One-tap complete/undo flow for habits and tasks.
+  - Task metadata support: priority, effort, energy window, estimated minutes.
+- **Lists**
+  - **Chores:** due-date oriented active list with quick complete/edit/delete.
+  - **Habits:** recurrence options (`Daily`, `Specific days`, `X days/week`) with streaks.
+  - **Habit insights:** bottom-sheet analytics + 20-week habit heatmap.
+  - **Projects:** create projects, track milestone progress %, manage milestone backlog.
+- **Done**
+  - 20-week day-completion heatmap based on planned vs completed items.
+  - Weekly reflection summary with recovery-friendly messaging.
+  - Completion history grouped by day with `Take back` undo actions.
+- **Settings**
+  - Appearance: dark mode, AMOLED/Black style, high contrast, text scaling.
+  - Focus nudges: local reminder scheduling + test notification.
+  - Voice typing controls: enable/disable + fallback speech toggle.
+  - Data safety: backup vault folder, sync-now, passphrase rotation, encrypted export/import, local reset.
+  - About/support links and release check shortcut.
 
-## Core Features
-- **Focus tab**
-  - Single-task card flow with clear `Start focus`, `Pause`, and `Mark complete` actions.
-  - Dedicated run mode with timer continuity.
-  - Daily completion state with a fast path to create the next task.
-- **Lists tab**
-  - Unified task organization across `Chores`, `Habits`, and `Projects`.
-  - Quick-create and edit workflows for each list type.
-- **Done tab**
-  - Completion heatmap for daily consistency visibility.
-  - Weekly reflection summary with recovery-first tone.
-- **Settings tab**
-  - Appearance controls (theme, contrast, text scaling).
-  - Reminder controls (opt-in behavior).
-  - Backup vault setup, sync controls, and restore access.
-  - About, repository, release checks, and support links.
-- **Local-first architecture**
-  - Data remains on-device by default.
-  - Encrypted backup and restore workflow for portability.
+## Data Model
+- Task types: `Chore`, `Habit`, `Milestone`.
+- Habit completion logs are stored separately from task definitions.
+- Project milestones are linked by `projectId`; deleting a project removes its milestones.
+- Day progress tracks only scheduled tasks + due habits (unscheduled chores do not affect completion ratio).
 
-## Why Glitch
-- Calm interaction model focused on execution, not pressure.
-- Low-clutter information architecture for faster decision-making.
-- Recovery-friendly UX for sustainable long-term usage.
+## Storage, Backup, and Recovery
+- Local app state is stored on-device using Hive (`glitch_local_box`).
+- Encrypted backup export/import uses passphrase-based crypto:
+  - KDF: `PBKDF2-HMAC-SHA256` (`120000` iterations)
+  - Cipher: `AES-256-CBC`
+- Backup vault mode can auto-write debounced snapshots to a chosen folder (`glitch-vault-latest.json`).
+- Vault passphrase is stored locally in secure storage on-device.
+- Built-in migration recovery flow supports retry, raw encrypted backup export, and local reset.
 
 ## Screenshots
 | Focus | Focus Run | Settings |
 |---|---|---|
 | <img src="screenshots/1000307679.png" alt="Focus task card" width="220" /> | <img src="screenshots/1000307680.png" alt="Focus run timer" width="220" /> | <img src="screenshots/1000307677.png" alt="Settings screen" width="220" /> |
 
-## Install & Run
+## Install and Run
 ```bash
 flutter pub get
 flutter run
@@ -65,9 +76,14 @@ flutter analyze
 flutter test
 ```
 
+## Platform Notes
+- Android permissions used: notifications, microphone, and external storage access for backup vault folders.
+- iOS build is supported for core app usage; voice typing is currently Android-only in code.
+
 ## Data & Privacy
 - Glitch is local-first and does not require cloud accounts for core use.
-- Backup exports are encrypted and designed for restore across devices when using the same passphrase.
+- Backups are encrypted and can be restored on other devices with the same passphrase.
+- No server-side account or sync is required for core functionality.
 
 ## Support
 - Buy me a coffee: [buymeacoffee.com/vichukartha](https://buymeacoffee.com/vichukartha)
