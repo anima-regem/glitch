@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 2,
+  "defaultModelId": "standard",
+  "models": [
+    {
+      "id": "standard",
+      "displayName": "Standard",
+      "bundleId": "zipformer_en_standard",
+      "profile": "int8",
+      "qualityHint": "Balanced quality with faster download and lower storage use.",
+      "sizeLabel": "~122 MB",
+      "language": "en",
+      "version": "2023-02-17",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2",
+      "sha256": "9c559283e8498d3fe95913c79ca1cb454bb26281ac2b102b41306c7d752765d9",
+      "expectedBytes": 127887156,
+      "sampleRate": 16000,
+      "numThreads": 2,
+      "encoderFile": "encoder-epoch-99-avg-1.int8.onnx",
+      "decoderFile": "decoder-epoch-99-avg-1.int8.onnx",
+      "joinerFile": "joiner-epoch-99-avg-1.int8.onnx",
+      "tokensFile": "tokens.txt"
+    },
+    {
+      "id": "ultra_int8",
+      "displayName": "Ultra (int8)",
+      "bundleId": "zipformer_en_ultra",
+      "profile": "int8",
+      "qualityHint": "Higher quality model with int8 profile for better speed.",
+      "sizeLabel": "~507 MB",
+      "language": "en",
+      "version": "2023-06-21",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-21.tar.bz2",
+      "sha256": "455f40e556aa2b20ac9d3bffd603b58002075c1193b4070938540c11efe0a4da",
+      "expectedBytes": 506956414,
+      "sampleRate": 16000,
+      "numThreads": 2,
+      "encoderFile": "encoder-epoch-99-avg-1.int8.onnx",
+      "decoderFile": "decoder-epoch-99-avg-1.int8.onnx",
+      "joinerFile": "joiner-epoch-99-avg-1.int8.onnx",
+      "tokensFile": "tokens.txt"
+    },
+    {
+      "id": "ultra_full",
+      "displayName": "Ultra Max (full)",
+      "bundleId": "zipformer_en_ultra",
+      "profile": "full",
+      "qualityHint": "Best accuracy using full-precision runtime paths.",
+      "sizeLabel": "~507 MB",
+      "language": "en",
+      "version": "2023-06-21",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-21.tar.bz2",
+      "sha256": "455f40e556aa2b20ac9d3bffd603b58002075c1193b4070938540c11efe0a4da",
+      "expectedBytes": 506956414,
+      "sampleRate": 16000,
+      "numThreads": 2,
+      "encoderFile": "encoder-epoch-99-avg-1.onnx",
+      "decoderFile": "decoder-epoch-99-avg-1.onnx",
+      "joinerFile": "joiner-epoch-99-avg-1.onnx",
+      "tokensFile": "tokens.txt"
+    }
+  ]
+}

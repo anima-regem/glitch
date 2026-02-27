@@ -151,7 +151,9 @@ Finder _textFieldByLabel(String label) {
 }
 
 void main() {
-  testWidgets('voice mic appears only when field is focused', (tester) async {
+  testWidgets('voice mic stays visible when voice typing is eligible', (
+    tester,
+  ) async {
     final service = _FakeVoiceTypingService();
     final controller = TextEditingController();
     final focusNode = FocusNode();
@@ -166,7 +168,8 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.mic_none), findsNothing);
+    expect(find.byIcon(Icons.mic_none), findsOneWidget);
+    expect(find.byKey(const Key('voice_typing_mic_button')), findsOneWidget);
 
     await tester.tap(_textFieldByLabel('Title'));
     await tester.pumpAndSettle();
@@ -174,7 +177,7 @@ void main() {
 
     focusNode.unfocus();
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.mic_none), findsNothing);
+    expect(find.byIcon(Icons.mic_none), findsOneWidget);
   });
 
   testWidgets('mic tap streams partial transcript and stops on second tap', (
@@ -344,6 +347,52 @@ void main() {
     },
   );
 
+  testWidgets(
+    'runtime on-device error asks consent and retries fallback when disabled',
+    (tester) async {
+      final service = _FakeVoiceTypingService();
+      final controller = TextEditingController();
+      final focusNode = FocusNode();
+      var persistedFallbackConsent = false;
+      addTearDown(controller.dispose);
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        _buildVoiceTypingHarness(
+          service: service,
+          controller: controller,
+          focusNode: focusNode,
+          allowNetworkFallback: false,
+          onAllowNetworkFallbackChanged: (value) async {
+            persistedFallbackConsent = value;
+          },
+        ),
+      );
+
+      await tester.tap(_textFieldByLabel('Title'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.mic_none));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(service.onDeviceStartCalls, 1);
+
+      service.emitError(
+        'Speech language is unavailable on this device.',
+        supportsFallbackHint: true,
+        reason: VoiceTypingErrorReason.languageUnavailable,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fallback speech mode?'), findsOneWidget);
+      await tester.tap(find.text('Allow fallback'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(persistedFallbackConsent, isTrue);
+      expect(service.stopCalls, greaterThanOrEqualTo(1));
+      expect(service.fallbackStartCalls, 1);
+    },
+  );
+
   testWidgets('recognizer unavailable shows keyboard dictation guidance', (
     tester,
   ) async {
@@ -375,6 +424,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Use keyboard voice typing'), findsOneWidget);
+    expect(find.text('Got it'), findsOneWidget);
+
+    await tester.tap(find.text('Got it'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('model missing shows offline model setup guidance', (
+    tester,
+  ) async {
+    final service = _FakeVoiceTypingService();
+    service.onDeviceResult = const VoiceTypingStartResult(
+      started: false,
+      usingOnDevice: false,
+      failure: VoiceTypingStartFailure.initializeFailed,
+      message:
+          'Offline voice model is not installed. Download it from Settings.',
+      errorReason: VoiceTypingErrorReason.modelNotInstalled,
+    );
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      _buildVoiceTypingHarness(
+        service: service,
+        controller: controller,
+        focusNode: focusNode,
+      ),
+    );
+
+    await tester.tap(_textFieldByLabel('Title'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.mic_none));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Offline voice model needed'), findsOneWidget);
     expect(find.text('Got it'), findsOneWidget);
 
     await tester.tap(find.text('Got it'));

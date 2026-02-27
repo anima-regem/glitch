@@ -6,11 +6,29 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/app_preferences.dart';
+import '../../core/services/voice_model_capability_service.dart';
+import '../../core/services/voice_model_catalog.dart';
 import '../../core/services/storage_permission_service.dart';
+import '../../core/services/voice_model_manager.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/backup/backup_restore_screen.dart';
 import '../../features/backup/passphrase_prompt.dart';
 import '../../shared/state/app_controller.dart';
+
+final voiceModelCatalogProvider = FutureProvider<List<VoiceModelSpec>>((
+  ref,
+) async {
+  return ref.watch(voiceModelManagerProvider).listAvailableModels();
+});
+
+final voiceModelCapabilityProvider =
+    FutureProvider.family<VoiceModelCapabilityDecision, VoiceModelSpec>((
+      ref,
+      model,
+    ) async {
+      final service = ref.watch(voiceModelCapabilityServiceProvider);
+      return service.evaluateModel(model);
+    });
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -28,6 +46,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       'assets/support/buymeacoffee_qr.png';
 
   bool _vaultBusy = false;
+  bool _voiceModelBusy = false;
   bool _sendingTestReminder = false;
   bool? _lastReminderTestSuccess;
   String? _lastReminderTestMessage;
@@ -54,6 +73,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       data: (data) {
         final palette = context.glitchPalette;
         final prefs = data.preferences;
+        final modelStateAsync = ref.watch(voiceModelStateProvider);
+        final modelState =
+            modelStateAsync.valueOrNull ??
+            ref.read(voiceModelManagerProvider).currentState;
+        final modelCatalogAsync = ref.watch(voiceModelCatalogProvider);
+        final availableModels =
+            modelCatalogAsync.valueOrNull ?? const <VoiceModelSpec>[];
+        final selectedModelId = _selectedModelIdForPreferences(
+          prefs: prefs,
+          models: availableModels,
+        );
+        final selectedModel = _findModelById(
+          models: availableModels,
+          modelId: selectedModelId,
+        );
+        final selectedCapability = selectedModel == null
+            ? const VoiceModelCapabilityDecision.supported()
+            : (ref
+                      .watch(voiceModelCapabilityProvider(selectedModel))
+                      .valueOrNull ??
+                  const VoiceModelCapabilityDecision.supported());
+        final selectedModelReady =
+            modelState.isReady &&
+            modelState.installedModel?.spec.id == selectedModelId;
+        final modelActionInProgress = modelState.isInProgress;
+        final selectedModelSupported = selectedCapability.supported;
+        final hasInstalledModelMetadata =
+            prefs.voiceTypingModelVersion?.trim().isNotEmpty ?? false;
         final vaultPath = prefs.backupVaultPath;
         final hasVaultPath = vaultPath != null && vaultPath.trim().isNotEmpty;
 
@@ -211,7 +258,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Use hold-to-talk dictation on text fields.',
+                      'Use tap-toggle or hold-to-talk dictation on text fields.',
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
@@ -222,7 +269,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       value: prefs.voiceTypingEnabled,
                       title: const Text('Enable voice typing'),
                       subtitle: const Text(
-                        'Shows a hold-to-talk mic on text inputs.',
+                        'Shows a tap/hold mic on text inputs.',
                       ),
                       onChanged: (enabled) {
                         ref
@@ -244,6 +291,220 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   .setVoiceTypingAllowNetworkFallback(enabled);
                             }
                           : null,
+                    ),
+                    const Divider(height: 20),
+                    Text(
+                      'Offline Voice Model (Beta)',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: prefs.voiceTypingOnDeviceModelBetaEnabled,
+                      title: const Text('Enable offline voice model beta'),
+                      subtitle: const Text(
+                        'Uses a downloaded on-device model first, then falls back to the system recognizer.',
+                      ),
+                      onChanged: prefs.voiceTypingEnabled
+                          ? (enabled) {
+                              ref
+                                  .read(appControllerProvider.notifier)
+                                  .setVoiceTypingOnDeviceModelBetaEnabled(
+                                    enabled,
+                                  );
+                            }
+                          : null,
+                    ),
+                    if (modelCatalogAsync.hasError)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Unable to load model options right now.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: palette.warning),
+                        ),
+                      ),
+                    if (availableModels.isEmpty && modelCatalogAsync.isLoading)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Loading model options...',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                      ),
+                    if (availableModels.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Model quality',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      ...availableModels.map((model) {
+                        final capability =
+                            ref
+                                .watch(voiceModelCapabilityProvider(model))
+                                .valueOrNull ??
+                            const VoiceModelCapabilityDecision.supported();
+                        final selected = model.id == selectedModelId;
+                        final supported = capability.supported;
+                        final capabilityText = supported
+                            ? 'Supported on this device'
+                            : (capability.reason ??
+                                  'Not supported on this device right now.');
+                        final selectionDisabled =
+                            !prefs.voiceTypingOnDeviceModelBetaEnabled ||
+                            _voiceModelBusy ||
+                            modelActionInProgress ||
+                            !supported;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          enabled: !selectionDisabled,
+                          title: Text(model.displayName),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text('${model.sizeLabel} • ${model.qualityHint}'),
+                              const SizedBox(height: 2),
+                              Text(
+                                capabilityText,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: supported
+                                          ? palette.accent
+                                          : palette.warning,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          trailing: Icon(
+                            selected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: selected
+                                ? palette.accent
+                                : palette.textMuted,
+                          ),
+                          onTap: selectionDisabled
+                              ? null
+                              : () => _selectVoiceModel(model: model),
+                        );
+                      }),
+                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Selected model: ${selectedModel?.displayName ?? selectedModelId}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _voiceModelInstallationText(
+                        context: context,
+                        prefs: prefs,
+                        state: modelState,
+                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _voiceModelSummaryText(
+                        selectedModel: selectedModel,
+                        selectedCapability: selectedCapability,
+                        state: modelState,
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color:
+                            modelState.status ==
+                                    VoiceModelInstallStatus.error ||
+                                !selectedCapability.supported
+                            ? palette.warning
+                            : palette.textMuted,
+                      ),
+                    ),
+                    if (modelState.isInProgress) ...<Widget>[
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: modelState.isDownloading
+                            ? modelState.progress
+                            : null,
+                        minHeight: 6,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _voiceModelProgressLabel(modelState),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        FilledButton.icon(
+                          onPressed:
+                              !prefs.voiceTypingOnDeviceModelBetaEnabled ||
+                                  _voiceModelBusy ||
+                                  modelActionInProgress ||
+                                  selectedModel == null ||
+                                  !selectedModelSupported
+                              ? null
+                              : () => _prepareVoiceModel(
+                                  modelId: selectedModel.id,
+                                  allowCellular: false,
+                                ),
+                          icon: const Icon(Icons.download_outlined),
+                          label: Text(
+                            selectedModelReady
+                                ? 'Update selected model'
+                                : 'Download selected model',
+                          ),
+                        ),
+                        if (modelState.requiresCellularOverride &&
+                            prefs.voiceTypingOnDeviceModelBetaEnabled)
+                          OutlinedButton.icon(
+                            onPressed:
+                                _voiceModelBusy ||
+                                    modelActionInProgress ||
+                                    selectedModel == null ||
+                                    !selectedModelSupported
+                                ? null
+                                : () => _prepareVoiceModel(
+                                    modelId: selectedModel.id,
+                                    allowCellular: true,
+                                  ),
+                            icon: const Icon(Icons.network_cell),
+                            label: const Text('Continue on cellular'),
+                          ),
+                        if (modelActionInProgress)
+                          OutlinedButton.icon(
+                            onPressed: _cancelVoiceModelDownload,
+                            icon: const Icon(Icons.close),
+                            label: const Text('Cancel'),
+                          ),
+                        OutlinedButton.icon(
+                          onPressed:
+                              _voiceModelBusy ||
+                                  (!modelActionInProgress &&
+                                      !modelState.isReady &&
+                                      !hasInstalledModelMetadata)
+                              ? null
+                              : _removeVoiceModel,
+                          icon: const Icon(Icons.delete_outline),
+                          label: Text(
+                            modelActionInProgress
+                                ? 'Cancel & remove'
+                                : 'Remove model',
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -679,6 +940,320 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } finally {
       if (mounted) {
         setState(() => _sendingTestReminder = false);
+      }
+    }
+  }
+
+  String _voiceModelSummaryText({
+    required VoiceModelSpec? selectedModel,
+    required VoiceModelCapabilityDecision selectedCapability,
+    required VoiceModelState state,
+  }) {
+    final selectedName = selectedModel?.displayName ?? 'Selected model';
+    final stateMessage = state.message?.trim();
+
+    if (!selectedCapability.supported) {
+      return selectedCapability.reason ??
+          '$selectedName is not supported on this device right now.';
+    }
+
+    switch (state.status) {
+      case VoiceModelInstallStatus.ready:
+        final activeName =
+            state.installedModel?.spec.displayName ?? selectedName;
+        if (state.installedModel?.spec.id == selectedModel?.id) {
+          return '$activeName is active for offline voice typing.';
+        }
+        return '$activeName is installed. Download $selectedName to switch.';
+      case VoiceModelInstallStatus.downloading:
+        return stateMessage?.isNotEmpty == true
+            ? stateMessage!
+            : 'Downloading $selectedName...';
+      case VoiceModelInstallStatus.preparing:
+        return stateMessage?.isNotEmpty == true
+            ? stateMessage!
+            : 'Preparing $selectedName...';
+      case VoiceModelInstallStatus.error:
+        return stateMessage?.isNotEmpty == true
+            ? stateMessage!
+            : 'Offline voice model failed. Try downloading again.';
+      case VoiceModelInstallStatus.notInstalled:
+        if (state.requiresCellularOverride) {
+          return 'Wi-Fi is recommended for model download. Use "Continue on cellular" to proceed now.';
+        }
+        return stateMessage?.isNotEmpty == true
+            ? stateMessage!
+            : 'No offline voice model installed yet.';
+    }
+  }
+
+  String _voiceModelInstallationText({
+    required BuildContext context,
+    required AppPreferences prefs,
+    required VoiceModelState state,
+  }) {
+    final installed = state.installedModel;
+    final version = installed?.spec.version ?? prefs.voiceTypingModelVersion;
+    final installedAt =
+        installed?.installedAt ?? prefs.voiceTypingModelInstalledAt;
+
+    if (version == null || version.trim().isEmpty) {
+      return 'Installed bundle: none';
+    }
+
+    if (installedAt == null) {
+      return 'Installed bundle version: $version';
+    }
+
+    final localDate = installedAt.toLocal();
+    final date = MaterialLocalizations.of(context).formatMediumDate(localDate);
+    final time = MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(TimeOfDay.fromDateTime(localDate));
+    return 'Installed bundle: v$version ($date, $time)';
+  }
+
+  String _selectedModelIdForPreferences({
+    required AppPreferences prefs,
+    required List<VoiceModelSpec> models,
+  }) {
+    if (models.isEmpty) {
+      return prefs.voiceTypingModelId?.trim().isNotEmpty == true
+          ? prefs.voiceTypingModelId!.trim()
+          : '';
+    }
+
+    final preferred = prefs.voiceTypingModelId?.trim() ?? '';
+    if (preferred.isEmpty) {
+      return models.first.id;
+    }
+
+    final matched = models.where((model) => model.id == preferred);
+    if (matched.isNotEmpty) {
+      return matched.first.id;
+    }
+
+    return models.first.id;
+  }
+
+  VoiceModelSpec? _findModelById({
+    required List<VoiceModelSpec> models,
+    required String modelId,
+  }) {
+    if (models.isEmpty || modelId.trim().isEmpty) {
+      return null;
+    }
+    final matched = models.where((model) => model.id == modelId);
+    if (matched.isEmpty) {
+      return null;
+    }
+    return matched.first;
+  }
+
+  String _voiceModelProgressLabel(VoiceModelState state) {
+    if (state.status == VoiceModelInstallStatus.preparing) {
+      return state.message?.trim().isNotEmpty == true
+          ? state.message!
+          : 'Extracting model files...';
+    }
+    final downloadedBytes = state.downloadedBytes;
+    final totalBytes = state.totalBytes;
+    if (downloadedBytes == null || totalBytes == null || totalBytes <= 0) {
+      return 'Downloading...';
+    }
+    final downloadedMb = downloadedBytes / (1024 * 1024);
+    final totalMb = totalBytes / (1024 * 1024);
+    final percent = ((downloadedBytes / totalBytes) * 100).clamp(0, 100);
+    return '${downloadedMb.toStringAsFixed(1)} MB / ${totalMb.toStringAsFixed(1)} MB (${percent.toStringAsFixed(0)}%)';
+  }
+
+  Future<void> _selectVoiceModel({required VoiceModelSpec model}) async {
+    setState(() => _voiceModelBusy = true);
+    try {
+      final capability = await ref
+          .read(voiceModelCapabilityServiceProvider)
+          .evaluateModel(model);
+      if (!capability.supported) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              capability.reason ??
+                  '${model.displayName} is not supported on this device right now.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final notifier = ref.read(appControllerProvider.notifier);
+      await notifier.setVoiceTypingModelSelection(model.id);
+
+      final manager = ref.read(voiceModelManagerProvider);
+      final installed = await manager.getInstalledModel(modelId: model.id);
+      if (installed != null) {
+        await notifier.setVoiceTypingModelInstallation(
+          modelId: installed.spec.id,
+          modelVersion: installed.spec.version,
+          installedAt: installed.installedAt,
+        );
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${model.displayName} is active now.')),
+        );
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${model.displayName} selected. Download selected model to use it offline.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _voiceModelBusy = false);
+      }
+    }
+  }
+
+  Future<void> _prepareVoiceModel({
+    required String modelId,
+    required bool allowCellular,
+  }) async {
+    VoiceModelSpec? selected;
+    try {
+      selected = _findModelById(
+        models: await ref.read(voiceModelCatalogProvider.future),
+        modelId: modelId,
+      );
+    } catch (_) {
+      selected = null;
+    }
+    if (selected != null) {
+      final capability = await ref
+          .read(voiceModelCapabilityServiceProvider)
+          .evaluateModel(selected);
+      if (!capability.supported) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              capability.reason ??
+                  '${selected.displayName} is not supported on this device right now.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final manager = ref.read(voiceModelManagerProvider);
+    final state = await manager.prepareModel(
+      modelId: modelId,
+      allowCellular: allowCellular,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (state.isReady && state.installedModel != null) {
+      final model = state.installedModel!;
+      final notifier = ref.read(appControllerProvider.notifier);
+      await notifier.setVoiceTypingModelSelection(model.spec.id);
+      await notifier.setVoiceTypingModelInstallation(
+        modelId: model.spec.id,
+        modelVersion: model.spec.version,
+        installedAt: model.installedAt,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${model.spec.displayName} is ready for offline use.'),
+        ),
+      );
+      return;
+    }
+
+    if (state.requiresCellularOverride) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Wi-Fi is recommended for model download. Use "Continue on cellular" to override.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (state.status == VoiceModelInstallStatus.error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            state.message ?? 'Offline voice model download failed.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final message = state.message?.trim();
+    if (message != null && message.isNotEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _cancelVoiceModelDownload() async {
+    await ref.read(voiceModelManagerProvider).cancelDownload();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Cancellation requested. Cleaning up model download...'),
+      ),
+    );
+  }
+
+  Future<void> _removeVoiceModel() async {
+    setState(() => _voiceModelBusy = true);
+    try {
+      final manager = ref.read(voiceModelManagerProvider);
+      final wasInProgress = manager.currentState.isInProgress;
+      await manager.removeModel();
+      await ref
+          .read(appControllerProvider.notifier)
+          .clearVoiceTypingModelInstallMetadata();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            wasInProgress
+                ? 'Offline voice model download cancelled and removed.'
+                : 'Offline voice model removed.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _voiceModelBusy = false);
       }
     }
   }

@@ -375,10 +375,47 @@ void main() {
 
       await notifier.setVoiceTypingEnabled(false);
       await notifier.setVoiceTypingAllowNetworkFallback(true);
+      await notifier.setVoiceTypingOnDeviceModelBetaEnabled(true);
+      await notifier.setVoiceTypingModelInstallation(
+        modelId: 'standard',
+        modelVersion: '2023-02-17',
+        installedAt: DateTime(2026, 2, 25, 17, 10),
+      );
 
       final prefs = container.read(appControllerProvider).value!.preferences;
       expect(prefs.voiceTypingEnabled, isFalse);
       expect(prefs.voiceTypingAllowNetworkFallback, isTrue);
+      expect(prefs.voiceTypingOnDeviceModelBetaEnabled, isTrue);
+      expect(prefs.voiceTypingModelId, 'standard');
+      expect(prefs.voiceTypingModelVersion, '2023-02-17');
+      expect(prefs.voiceTypingModelInstalledAt, DateTime(2026, 2, 25, 17, 10));
+
+      await notifier.setVoiceTypingModelSelection('ultra_full');
+      final selected = container.read(appControllerProvider).value!.preferences;
+      expect(selected.voiceTypingModelId, 'ultra_full');
+      expect(selected.voiceTypingModelVersion, '2023-02-17');
+      expect(
+        selected.voiceTypingModelInstalledAt,
+        DateTime(2026, 2, 25, 17, 10),
+      );
+
+      await notifier.clearVoiceTypingModelInstallMetadata();
+      final metadataCleared = container
+          .read(appControllerProvider)
+          .value!
+          .preferences;
+      expect(metadataCleared.voiceTypingModelId, 'ultra_full');
+      expect(metadataCleared.voiceTypingModelVersion, isNull);
+      expect(metadataCleared.voiceTypingModelInstalledAt, isNull);
+
+      await notifier.clearVoiceTypingModelInstallation();
+      final fullyCleared = container
+          .read(appControllerProvider)
+          .value!
+          .preferences;
+      expect(fullyCleared.voiceTypingModelId, isNull);
+      expect(fullyCleared.voiceTypingModelVersion, isNull);
+      expect(fullyCleared.voiceTypingModelInstalledAt, isNull);
     },
   );
 

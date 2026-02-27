@@ -96,6 +96,7 @@ AppData _sampleData() {
       backupPromptDeferrals: 0,
       voiceTypingEnabled: true,
       voiceTypingAllowNetworkFallback: false,
+      voiceTypingOnDeviceModelBetaEnabled: false,
     ),
   );
 }

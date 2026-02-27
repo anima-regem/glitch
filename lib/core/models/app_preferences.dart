@@ -33,7 +33,11 @@ class AppPreferences {
     required this.backupPromptDeferrals,
     required this.voiceTypingEnabled,
     required this.voiceTypingAllowNetworkFallback,
+    required this.voiceTypingOnDeviceModelBetaEnabled,
     this.backupVaultPath,
+    this.voiceTypingModelId,
+    this.voiceTypingModelVersion,
+    this.voiceTypingModelInstalledAt,
     this.backupVaultPromptDismissed = false,
     this.lastVaultSyncAt,
     this.lastVaultSyncError,
@@ -41,7 +45,7 @@ class AppPreferences {
     this.lastMigrationResult,
   });
 
-  static const int currentSchemaVersion = 2;
+  static const int currentSchemaVersion = 3;
 
   factory AppPreferences.defaults() {
     return const AppPreferences(
@@ -55,7 +59,11 @@ class AppPreferences {
       backupPromptDeferrals: 0,
       voiceTypingEnabled: true,
       voiceTypingAllowNetworkFallback: false,
+      voiceTypingOnDeviceModelBetaEnabled: false,
       backupVaultPath: null,
+      voiceTypingModelId: null,
+      voiceTypingModelVersion: null,
+      voiceTypingModelInstalledAt: null,
       backupVaultPromptDismissed: false,
       lastVaultSyncAt: null,
       lastVaultSyncError: null,
@@ -74,7 +82,11 @@ class AppPreferences {
   final int backupPromptDeferrals;
   final bool voiceTypingEnabled;
   final bool voiceTypingAllowNetworkFallback;
+  final bool voiceTypingOnDeviceModelBetaEnabled;
   final String? backupVaultPath;
+  final String? voiceTypingModelId;
+  final String? voiceTypingModelVersion;
+  final DateTime? voiceTypingModelInstalledAt;
   final bool backupVaultPromptDismissed;
   final DateTime? lastVaultSyncAt;
   final String? lastVaultSyncError;
@@ -92,13 +104,21 @@ class AppPreferences {
     int? backupPromptDeferrals,
     bool? voiceTypingEnabled,
     bool? voiceTypingAllowNetworkFallback,
+    bool? voiceTypingOnDeviceModelBetaEnabled,
     String? backupVaultPath,
+    String? voiceTypingModelId,
+    String? voiceTypingModelVersion,
+    DateTime? voiceTypingModelInstalledAt,
     bool? backupVaultPromptDismissed,
     DateTime? lastVaultSyncAt,
     String? lastVaultSyncError,
     int? dataSchemaVersion,
     String? lastMigrationResult,
     bool clearBackupVaultPath = false,
+    bool clearVoiceTypingModelId = false,
+    bool clearVoiceTypingModelVersion = false,
+    bool clearVoiceTypingModelInstalledAt = false,
+    bool clearVoiceTypingModelInstallation = false,
     bool clearLastVaultSyncAt = false,
     bool clearLastVaultSyncError = false,
     bool clearLastMigrationResult = false,
@@ -117,9 +137,24 @@ class AppPreferences {
       voiceTypingAllowNetworkFallback:
           voiceTypingAllowNetworkFallback ??
           this.voiceTypingAllowNetworkFallback,
+      voiceTypingOnDeviceModelBetaEnabled:
+          voiceTypingOnDeviceModelBetaEnabled ??
+          this.voiceTypingOnDeviceModelBetaEnabled,
       backupVaultPath: clearBackupVaultPath
           ? null
           : (backupVaultPath ?? this.backupVaultPath),
+      voiceTypingModelId:
+          clearVoiceTypingModelInstallation || clearVoiceTypingModelId
+          ? null
+          : (voiceTypingModelId ?? this.voiceTypingModelId),
+      voiceTypingModelVersion:
+          clearVoiceTypingModelInstallation || clearVoiceTypingModelVersion
+          ? null
+          : (voiceTypingModelVersion ?? this.voiceTypingModelVersion),
+      voiceTypingModelInstalledAt:
+          clearVoiceTypingModelInstallation || clearVoiceTypingModelInstalledAt
+          ? null
+          : (voiceTypingModelInstalledAt ?? this.voiceTypingModelInstalledAt),
       backupVaultPromptDismissed:
           backupVaultPromptDismissed ?? this.backupVaultPromptDismissed,
       lastVaultSyncAt: clearLastVaultSyncAt
@@ -148,7 +183,13 @@ class AppPreferences {
       'backupPromptDeferrals': backupPromptDeferrals,
       'voiceTypingEnabled': voiceTypingEnabled,
       'voiceTypingAllowNetworkFallback': voiceTypingAllowNetworkFallback,
+      'voiceTypingOnDeviceModelBetaEnabled':
+          voiceTypingOnDeviceModelBetaEnabled,
       'backupVaultPath': backupVaultPath,
+      'voiceTypingModelId': voiceTypingModelId,
+      'voiceTypingModelVersion': voiceTypingModelVersion,
+      'voiceTypingModelInstalledAt': voiceTypingModelInstalledAt
+          ?.toIso8601String(),
       'backupVaultPromptDismissed': backupVaultPromptDismissed,
       'lastVaultSyncAt': lastVaultSyncAt?.toIso8601String(),
       'lastVaultSyncError': lastVaultSyncError,
@@ -181,7 +222,20 @@ class AppPreferences {
       voiceTypingEnabled: json['voiceTypingEnabled'] as bool? ?? true,
       voiceTypingAllowNetworkFallback:
           json['voiceTypingAllowNetworkFallback'] as bool? ?? false,
+      voiceTypingOnDeviceModelBetaEnabled:
+          json['voiceTypingOnDeviceModelBetaEnabled'] as bool? ?? false,
       backupVaultPath: (path == null || path.isEmpty) ? null : path,
+      voiceTypingModelId:
+          (json['voiceTypingModelId'] as String?)?.trim().isEmpty == true
+          ? null
+          : json['voiceTypingModelId'] as String?,
+      voiceTypingModelVersion:
+          (json['voiceTypingModelVersion'] as String?)?.trim().isEmpty == true
+          ? null
+          : json['voiceTypingModelVersion'] as String?,
+      voiceTypingModelInstalledAt: DateTime.tryParse(
+        json['voiceTypingModelInstalledAt'] as String? ?? '',
+      ),
       backupVaultPromptDismissed:
           json['backupVaultPromptDismissed'] as bool? ?? false,
       lastVaultSyncAt: DateTime.tryParse(

@@ -94,6 +94,7 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
   bool _fallbackRetryAttempted = false;
   bool _recoveringToFallback = false;
   bool _keyboardGuideShownForAttempt = false;
+  bool _modelGuideShownForAttempt = false;
 
   String? _statusText;
   String? _voiceErrorText;
@@ -115,8 +116,7 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
         !widget.obscureText;
   }
 
-  bool get _showMicButton =>
-      _voiceAvailable && (widget.alwaysShowMicButton || _fieldFocused);
+  bool get _showMicButton => _voiceAvailable;
 
   @override
   void initState() {
@@ -203,6 +203,9 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       return existingSuffixIcon;
     }
 
+    final palette = context.glitchPalette;
+    final isHighlighted = _listening || _starting;
+
     final micButton = GestureDetector(
       onTap: _handleMicTap,
       onLongPressStart: _handleMicLongPressStart,
@@ -212,17 +215,40 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       child: Tooltip(
         message: _listening ? 'Stop voice typing' : 'Start voice typing',
         child: SizedBox(
-          width: 46,
-          height: 46,
+          width: 48,
+          height: 48,
           child: Center(
             child: ScaleTransition(
               scale: _pulseController,
-              child: Icon(
-                _listening ? Icons.mic : Icons.mic_none,
-                size: 20,
-                color: _listening
-                    ? Theme.of(context).colorScheme.secondary
-                    : Theme.of(context).colorScheme.primary,
+              child: AnimatedContainer(
+                key: const Key('voice_typing_mic_button'),
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: palette.accent,
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: palette.accent.withValues(
+                        alpha: isHighlighted ? 0.55 : 0.35,
+                      ),
+                      blurRadius: isHighlighted ? 18 : 12,
+                      spreadRadius: isHighlighted ? 2 : 1,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  _listening ? Icons.mic : Icons.mic_none,
+                  size: 22,
+                  color: palette.amoled,
+                ),
               ),
             ),
           ),
@@ -231,12 +257,20 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     );
 
     if (existingSuffixIcon == null) {
-      return micButton;
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(end: 4),
+        child: micButton,
+      );
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: <Widget>[existingSuffixIcon, micButton],
+      children: <Widget>[
+        existingSuffixIcon,
+        const SizedBox(width: 4),
+        micButton,
+        const SizedBox(width: 2),
+      ],
     );
   }
 
@@ -280,6 +314,7 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
     _fallbackRetryAttempted = false;
     _recoveringToFallback = false;
     _keyboardGuideShownForAttempt = false;
+    _modelGuideShownForAttempt = false;
     _captureBaseline();
 
     final onDeviceResult = await _voiceService!.startListening(
@@ -314,6 +349,9 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
 
     _starting = false;
     _setVoiceError(onDeviceResult.message ?? 'Unable to start voice typing.');
+    if (_shouldOfferModelGuideForStartResult(onDeviceResult)) {
+      unawaited(_showOfflineModelGuide());
+    }
     if (_shouldOfferKeyboardGuideForStartResult(onDeviceResult)) {
       unawaited(_showKeyboardDictationGuide());
     }
@@ -375,6 +413,9 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
       }
       if (_sessionOpen || _starting || _recoveringToFallback) {
         _setVoiceError(event.message);
+        if (_shouldOfferModelGuideForError(event)) {
+          unawaited(_showOfflineModelGuide());
+        }
         if (_shouldOfferKeyboardGuideForError(event)) {
           unawaited(_showKeyboardDictationGuide());
         }
@@ -548,11 +589,50 @@ class _VoiceTypingTextFieldState extends ConsumerState<VoiceTypingTextField>
 
   bool _shouldOfferKeyboardGuideForStartResult(VoiceTypingStartResult result) {
     return result.errorReason == VoiceTypingErrorReason.recognizerUnavailable ||
-        result.failure == VoiceTypingStartFailure.initializeFailed;
+        (result.failure == VoiceTypingStartFailure.initializeFailed &&
+            result.errorReason == VoiceTypingErrorReason.unknown);
+  }
+
+  bool _shouldOfferModelGuideForStartResult(VoiceTypingStartResult result) {
+    return result.errorReason == VoiceTypingErrorReason.modelNotInstalled ||
+        result.errorReason == VoiceTypingErrorReason.modelDownloading ||
+        result.errorReason == VoiceTypingErrorReason.modelDownloadFailed;
   }
 
   bool _shouldOfferKeyboardGuideForError(VoiceTypingEventError event) {
     return event.reason == VoiceTypingErrorReason.recognizerUnavailable;
+  }
+
+  bool _shouldOfferModelGuideForError(VoiceTypingEventError event) {
+    return event.reason == VoiceTypingErrorReason.modelNotInstalled ||
+        event.reason == VoiceTypingErrorReason.modelDownloading ||
+        event.reason == VoiceTypingErrorReason.modelDownloadFailed;
+  }
+
+  Future<void> _showOfflineModelGuide() async {
+    if (!mounted || _modelGuideShownForAttempt) {
+      return;
+    }
+    _modelGuideShownForAttempt = true;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Offline voice model needed'),
+          content: const Text(
+            'Offline voice typing beta needs a downloaded model.\n\n'
+            'Open Settings -> Voice Typing -> Offline Voice Model (Beta), '
+            'download the model, then retry dictation.',
+          ),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Got it'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _showKeyboardDictationGuide() async {

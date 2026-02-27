@@ -256,12 +256,23 @@ class _AppShellState extends ConsumerState<AppShell> {
       return null;
     }
 
+    final palette = context.glitchPalette;
     final actions = switch (_currentSection) {
       AppSection.lists => <Widget>[
-        IconButton(
-          tooltip: 'Add item',
-          onPressed: _showListsCreateMenu,
-          icon: const Icon(Icons.add),
+        Padding(
+          padding: const EdgeInsetsDirectional.only(end: 10),
+          child: Material(
+            color: palette.accent,
+            shadowColor: palette.accent.withValues(alpha: 0.5),
+            shape: const CircleBorder(),
+            elevation: 3,
+            child: IconButton(
+              key: const Key('lists_appbar_add_button'),
+              tooltip: 'Add item',
+              onPressed: _showListsCreateMenu,
+              icon: Icon(Icons.add, color: palette.amoled),
+            ),
+          ),
         ),
       ],
       AppSection.done ||

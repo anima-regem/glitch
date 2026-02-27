@@ -41,6 +41,7 @@ Glitch is a local-first Flutter app for daily execution with minimal friction: p
   - Appearance: dark mode, AMOLED/Black style, high contrast, text scaling.
   - Focus nudges: local reminder scheduling + test notification.
   - Voice typing controls: enable/disable + fallback speech toggle.
+  - Offline Voice Model (Beta): optional on-device English model download (single active bundle, update/remove controls, Wi-Fi recommended with manual cellular override).
   - Data safety: backup vault folder, sync-now, passphrase rotation, encrypted export/import, local reset.
   - About/support links and release check shortcut.
 
@@ -78,12 +79,17 @@ flutter test
 
 ## Platform Notes
 - Android permissions used: notifications, microphone, and external storage access for backup vault folders.
+- Voice model beta uses download-on-demand storage under app support files; model artifacts are verified (SHA-256) before activation.
+- Download flow exposes `downloading` and `preparing` phases; `Cancel` and `Cancel & remove` stay available while transfer/extraction is active.
+- Adaptive guardrails block Ultra models on low-memory Android devices (`ultra_int8`: >=6 GB physical + >=1.2 GB available RAM, `ultra_full`: >=8 GB physical + >=1.8 GB available RAM, and not low-RAM flagged).
 - iOS build is supported for core app usage; voice typing is currently Android-only in code.
 
 ## Data & Privacy
 - Glitch is local-first and does not require cloud accounts for core use.
 - Backups are encrypted and can be restored on other devices with the same passphrase.
 - No server-side account or sync is required for core functionality.
+- Voice typing defaults to local on-device/system recognition paths; any network-capable fallback remains explicit opt-in.
+- If offline model runtime overruns device limits, Glitch automatically falls back to native system recognizer while preserving existing network-fallback consent rules.
 
 ## Support
 - Buy me a coffee: [buymeacoffee.com/vichukartha](https://buymeacoffee.com/vichukartha)

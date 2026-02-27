@@ -10,7 +10,11 @@ import '../../core/models/habit_log.dart';
 import '../../core/models/project.dart';
 import '../../core/models/task.dart';
 import '../../core/services/backup_service.dart';
+import '../../core/services/composite_voice_typing_service.dart';
 import '../../core/services/reminder_service.dart';
+import '../../core/services/sherpa_voice_typing_service.dart';
+import '../../core/services/voice_model_capability_service.dart';
+import '../../core/services/voice_model_manager.dart';
 import '../../core/services/voice_typing_service.dart';
 import '../../core/storage/local_store.dart';
 import '../../core/utils/date_time_utils.dart';
@@ -23,9 +27,64 @@ final reminderServiceProvider = Provider<ReminderService>(
   (ref) => const NoopReminderService(),
 );
 
-final voiceTypingServiceProvider = Provider<VoiceTypingService>(
+final nativeVoiceTypingServiceProvider = Provider<VoiceTypingService>(
   (ref) => NativeVoiceTypingService(),
 );
+
+final voiceModelCapabilityServiceProvider =
+    Provider<VoiceModelCapabilityService>(
+      (ref) => AndroidVoiceModelCapabilityService(),
+    );
+
+final voiceModelManagerProvider = Provider<VoiceModelManager>((ref) {
+  final manager = FileVoiceModelManager(
+    capabilityService: ref.watch(voiceModelCapabilityServiceProvider),
+  );
+  ref.onDispose(manager.dispose);
+  return manager;
+});
+
+final sherpaVoiceTypingServiceProvider = Provider<VoiceTypingService>((ref) {
+  final modelManager = ref.watch(voiceModelManagerProvider);
+  return SherpaVoiceTypingService(
+    modelManager: modelManager,
+    capabilityService: ref.watch(voiceModelCapabilityServiceProvider),
+    selectedModelId: () {
+      return ref
+          .read(appControllerProvider)
+          .valueOrNull
+          ?.preferences
+          .voiceTypingModelId;
+    },
+  );
+});
+
+final voiceModelStateProvider = StreamProvider<VoiceModelState>((ref) async* {
+  final manager = ref.watch(voiceModelManagerProvider);
+  yield manager.currentState;
+  yield* manager.states;
+});
+
+final voiceTypingServiceProvider = Provider<VoiceTypingService>((ref) {
+  final composite = CompositeVoiceTypingService(
+    sherpaService: ref.watch(sherpaVoiceTypingServiceProvider),
+    nativeService: ref.watch(nativeVoiceTypingServiceProvider),
+    modelManager: ref.watch(voiceModelManagerProvider),
+    isOfflineModelBetaEnabled: () {
+      final prefs = ref.read(appControllerProvider).valueOrNull?.preferences;
+      return prefs?.voiceTypingOnDeviceModelBetaEnabled ?? false;
+    },
+    selectedModelId: () {
+      return ref
+          .read(appControllerProvider)
+          .valueOrNull
+          ?.preferences
+          .voiceTypingModelId;
+    },
+  );
+  ref.onDispose(composite.dispose);
+  return composite;
+});
 
 final appControllerProvider = AsyncNotifierProvider<AppController, AppData>(
   AppController.new,
@@ -1049,6 +1108,69 @@ class AppController extends AsyncNotifier<AppData> {
     }
     await updatePreferences(
       prefs.copyWith(voiceTypingAllowNetworkFallback: enabled),
+    );
+  }
+
+  Future<void> setVoiceTypingOnDeviceModelBetaEnabled(bool enabled) async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    await updatePreferences(
+      prefs.copyWith(voiceTypingOnDeviceModelBetaEnabled: enabled),
+    );
+  }
+
+  Future<void> setVoiceTypingModelInstallation({
+    required String modelId,
+    required String modelVersion,
+    required DateTime installedAt,
+  }) async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    await updatePreferences(
+      prefs.copyWith(
+        voiceTypingModelId: modelId,
+        voiceTypingModelVersion: modelVersion,
+        voiceTypingModelInstalledAt: installedAt,
+      ),
+    );
+  }
+
+  Future<void> setVoiceTypingModelSelection(String modelId) async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    final normalized = modelId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    await updatePreferences(prefs.copyWith(voiceTypingModelId: normalized));
+  }
+
+  Future<void> clearVoiceTypingModelInstallMetadata() async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    await updatePreferences(
+      prefs.copyWith(
+        clearVoiceTypingModelVersion: true,
+        clearVoiceTypingModelInstalledAt: true,
+      ),
+    );
+  }
+
+  Future<void> clearVoiceTypingModelInstallation() async {
+    final prefs = _currentData?.preferences;
+    if (prefs == null) {
+      return;
+    }
+    await updatePreferences(
+      prefs.copyWith(clearVoiceTypingModelInstallation: true),
     );
   }
 

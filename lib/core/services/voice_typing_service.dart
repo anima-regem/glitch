@@ -26,6 +26,10 @@ enum VoiceTypingErrorReason {
   network,
   languageUnavailable,
   noMatch,
+  modelNotInstalled,
+  modelDownloading,
+  modelDownloadFailed,
+  modelRuntimeFailed,
 }
 
 class VoiceTypingAvailability {
@@ -465,6 +469,14 @@ class NativeVoiceTypingService implements VoiceTypingService {
           return 'On-device speech failed due to a network issue.';
         case VoiceTypingErrorReason.recognizerUnavailable:
           return 'Speech recognition service is unavailable on this device.';
+        case VoiceTypingErrorReason.modelNotInstalled:
+          return 'Offline voice model is not installed. Download it from Settings.';
+        case VoiceTypingErrorReason.modelDownloading:
+          return 'Offline voice model is still downloading.';
+        case VoiceTypingErrorReason.modelDownloadFailed:
+          return 'Offline voice model download failed. Please try again.';
+        case VoiceTypingErrorReason.modelRuntimeFailed:
+          return 'Offline voice model failed to start.';
         default:
           return error == null
               ? 'Unable to start on-device voice typing right now.'
@@ -481,6 +493,11 @@ class NativeVoiceTypingService implements VoiceTypingService {
         return 'Microphone permission is required for voice typing. Open system settings to allow it.';
       case VoiceTypingErrorReason.recognizerUnavailable:
         return 'Fallback speech recognition is unavailable on this device.';
+      case VoiceTypingErrorReason.modelNotInstalled:
+      case VoiceTypingErrorReason.modelDownloading:
+      case VoiceTypingErrorReason.modelDownloadFailed:
+      case VoiceTypingErrorReason.modelRuntimeFailed:
+        return 'Offline voice model is unavailable right now.';
       default:
         return error == null
             ? 'Unable to start fallback speech recognition right now.'
@@ -502,6 +519,14 @@ class NativeVoiceTypingService implements VoiceTypingService {
         return 'No speech was detected.';
       case VoiceTypingErrorReason.recognizerUnavailable:
         return 'Speech recognition service is unavailable on this device.';
+      case VoiceTypingErrorReason.modelNotInstalled:
+        return 'Offline voice model is not installed. Download it from Settings.';
+      case VoiceTypingErrorReason.modelDownloading:
+        return 'Offline voice model is still downloading.';
+      case VoiceTypingErrorReason.modelDownloadFailed:
+        return 'Offline voice model download failed. Please try again.';
+      case VoiceTypingErrorReason.modelRuntimeFailed:
+        return 'Offline voice model runtime failed.';
       case VoiceTypingErrorReason.unsupported:
       case VoiceTypingErrorReason.unknown:
         final normalized = code.trim();
