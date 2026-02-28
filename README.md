@@ -17,7 +17,9 @@
 ## Status
 - Version in source: `1.0.3+3`
 - Platforms: Android, iOS
-- Voice typing: Android only (on-device first, optional fallback mode)
+- Voice typing: Android only (model-first offline beta + native fallback)
+- Offline model choices: `Standard`, `Ultra (int8)`, `Ultra Max (full)` with single active installed bundle
+- Reliability patch status (February 28, 2026): cancel/remove works during `downloading` and `preparing`, extraction runs off UI isolate, adaptive RAM guardrails block unsupported ultra usage, and runtime overload auto-falls back to native recognizer
 
 ## Product Overview
 Glitch is a local-first Flutter app for daily execution with minimal friction: pick one task, run focus sessions, and keep momentum across chores, habits, and project milestones.
