@@ -16,6 +16,7 @@
 
 ## Status
 - Version in source: `1.0.3+3`
+- SDK constraint: Dart `^3.10.1`
 - Platforms: Android, iOS
 - Voice typing: Android only (model-first offline beta + native fallback)
 - Offline model choices: `Standard`, `Ultra (int8)`, `Ultra Max (full)` with single active installed bundle
@@ -80,7 +81,7 @@ flutter test
 ```
 
 ## Platform Notes
-- Android permissions used: notifications, microphone, and external storage access for backup vault folders.
+- Android permissions used: notifications, microphone, internet (model download + optional fallback paths), and external storage access for backup vault folders.
 - Voice model beta uses download-on-demand storage under app support files; model artifacts are verified (SHA-256) before activation.
 - Download flow exposes `downloading` and `preparing` phases; `Cancel` and `Cancel & remove` stay available while transfer/extraction is active.
 - Adaptive guardrails block Ultra models on low-memory Android devices (`ultra_int8`: >=6 GB physical + >=1.2 GB available RAM, `ultra_full`: >=8 GB physical + >=1.8 GB available RAM, and not low-RAM flagged).
@@ -103,6 +104,7 @@ flutter test
 - Latest releases: [GitHub Releases](https://github.com/anima-regem/glitch/releases/latest)
 - Google Play listing: [Glitch on Google Play](https://play.google.com/store/apps/details?id=in.karthav.glitch)
 - Privacy policy: [privacy-policy.html](privacy-policy.html)
+- CI/CD quick start: [CI_QUICKSTART.md](CI_QUICKSTART.md)
 
 ## Release Process
 - Release workflow guide: [RELEASE.md](RELEASE.md)
